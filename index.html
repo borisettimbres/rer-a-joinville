@@ -25,7 +25,7 @@
             height: 100vh; overflow: hidden;
         }
 
-        /* --- HEADER --- */
+        /* --- HEADER (UX Photo & Logos) --- */
         header {
             background-color: var(--ratp-bg-main);
             padding: 15px 25px;
@@ -37,7 +37,6 @@
 
         .header-logos { display: flex; align-items: center; gap: 12px; }
         
-        /* Logos basés sur votre image de référence */
         .logo-rer {
             border: 4px solid #1a1a1a; background: white; border-radius: 12px;
             width: 55px; height: 55px; display: flex; align-items: center;
@@ -58,7 +57,7 @@
             padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700;
         }
 
-        /* --- LISTE DES TRAINS --- */
+        /* --- LISTE DES TRAINS (Structure Photo) --- */
         .train-list { flex-grow: 1; padding: 0 25px; }
 
         .train-row {
@@ -96,10 +95,7 @@
             display: flex; align-items: center; gap: 20px;
             border-top: 2px solid var(--ratp-border-gray);
         }
-
         .alert-text { font-size: 15px; line-height: 1.3; flex: 1; }
-        .status-light { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
-        .online { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
     </style>
 </head>
 <body>
@@ -117,25 +113,23 @@
 </header>
 
 <div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Initialisation...</div>
+    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Recherche des trains...</div>
 </div>
 
 <div class="footer-alert">
     <div style="background:var(--ratp-line-a-red); color:white; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-weight:bold;">A</div>
     <div style="font-size: 25px;">⚠️</div>
     <div class="alert-text" id="status-bar">Connexion aux serveurs IDFM...</div>
-    <div id="status-light" class="status-light"></div>
 </div>
 
 <script>
-    // Configuration selon le contrat swagger.json
+    // Configuration selon le swagger.json
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; // Joinville-le-Pont
-    const LINE_REF = 'STIF:Line::C01742:'; // RER A
+    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; 
     
-    // Construction de l'URL basée sur swagger.json : host + basePath + path
-    const API_ENDPOINT = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&LineRef=${LINE_REF}`;
-    const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(API_ENDPOINT);
+    // Construction de l'URL avec apikey en paramètre pour plus de fiabilité avec le proxy
+    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
+    const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
@@ -143,30 +137,26 @@
 
     async function fetchSchedules() {
         try {
+            // On envoie aussi la clé dans le header comme demandé par le contrat
             const response = await fetch(PROXY_URL, {
                 method: 'GET',
-                headers: {
-                    'apikey': API_KEY, // Défini dans securityDefinitions de swagger.json
-                    'Accept': 'application/json'
-                }
+                headers: { 'apikey': API_KEY }
             });
 
-            if (!response.ok) throw new Error(`Erreur ${response.status}`);
+            if (!response.ok) throw new Error(`Code ${response.status}`);
             
             const data = await response.json();
             
-            // Format SIRI Lite
+            // Traitement du format SIRI Lite
             if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
-                const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
-                renderBoard(visits);
+                renderBoard(data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit);
                 document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A.";
-                document.getElementById('status-light').classList.add('online');
+            } else {
+                document.getElementById('status-bar').innerText = "⚠️ Aucune donnée reçue (Pas de trains).";
             }
         } catch (error) {
             console.error(error);
-            document.getElementById('status-bar').innerText = "⚠️ Liaison API interrompue. Affichage théorique.";
-            document.getElementById('status-light').classList.remove('online');
-            showDemo();
+            document.getElementById('status-bar').innerText = `⚠️ Erreur de liaison API (${error.message}). Vérifiez votre compte PRIM.`;
         }
     }
 
@@ -174,9 +164,9 @@
         const board = document.getElementById('board');
         board.innerHTML = '';
 
-        // On ne garde que la direction Ouest (notée "A" dans les flux RATP pour Paris/Province)
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
+            // On filtre pour la direction Paris/Ouest (DirectionName A)
             .filter(j => j.DirectionName[0].value === "A")
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
@@ -203,15 +193,6 @@
                         <span class="val">2</span>
                     </div>
                 </div>`;
-        });
-    }
-
-    function showDemo() {
-        const board = document.getElementById('board');
-        if (board.querySelectorAll('.train-row').length > 0) return;
-        board.innerHTML = '';
-        [{m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:8}, {m:'NELY', d:'CERGY-LE-HAUT', t:16}, {m:'TERI', d:'POISSY', t:24}].forEach(f => {
-            board.innerHTML += `<div class="train-row"><div class="mission-code">${f.m}</div><div class="destination-name">${f.d}</div><div class="time-box"><span class="val">${f.t}</span><span class="unit">min</span></div><div class="quai-box"><span class="label">quai</span><span class="val">2</span></div></div>`;
         });
     }
 
