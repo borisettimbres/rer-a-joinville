@@ -24,17 +24,18 @@
         .dest-row { font-size: 22px; font-weight: 700; text-transform: uppercase; line-height: 1.1; }
         .header-time { background-color: var(--ratp-bg-dark); color: white; padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700; }
         .train-list { flex-grow: 1; padding: 0 25px; }
-        .train-row { display: grid; grid-template-columns: 120px 1fr 140px 100px; align-items: center; padding: 20px 0; border-bottom: 2px solid var(--ratp-border-gray); }
-        .mission-code { background-color: #e0e0e0; padding: 5px 10px; border-radius: 5px; font-size: 16px; font-weight: bold; font-family: monospace; text-align: center; width: 80px; }
+        .train-row { display: grid; grid-template-columns: 130px 1fr 140px 100px; align-items: center; padding: 18px 0; border-bottom: 2px solid var(--ratp-border-gray); }
+        .mission-code { background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace; text-align: center; }
         .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; }
-        .time-box { background-color: var(--ratp-bg-dark); color: var(--ratp-text-yellow); border-radius: 8px; text-align: center; padding: 8px; width: 110px; }
-        .time-box .val { font-size: 42px; font-weight: 700; display: block; line-height: 0.9; }
-        .time-box .unit { font-size: 14px; text-transform: lowercase; }
-        .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 8px; text-align: center; width: 70px; margin-left: auto; }
-        .quai-box .label { font-size: 12px; display: block; }
-        .quai-box .val { font-size: 30px; font-weight: 700; }
-        footer { background: white; padding: 15px 30px; border-top: 2px solid var(--ratp-border-gray); font-size: 14px; display: flex; justify-content: space-between; }
-        .status-msg { font-weight: bold; }
+        .time-box { background-color: var(--ratp-bg-dark); color: var(--ratp-text-yellow); border-radius: 6px; text-align: center; padding: 6px; width: 100px; }
+        .time-box .val { font-size: 38px; font-weight: 700; display: block; line-height: 0.9; }
+        .time-box .unit { font-size: 13px; text-transform: lowercase; }
+        .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 6px; text-align: center; width: 65px; margin-left: auto; }
+        .quai-box .label { font-size: 11px; display: block; }
+        .quai-box .val { font-size: 26px; font-weight: 700; }
+        footer { background: white; padding: 10px 30px; border-top: 2px solid var(--ratp-border-gray); font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .status-ok { color: #4caf50; font-weight: bold; }
+        .status-err { color: #c0333a; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -52,54 +53,46 @@
 </header>
 
 <div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:24px; color:#999;">Analyse du flux SIRI Lite...</div>
+    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Chargement du SIEL...</div>
 </div>
 
 <footer>
-    <div id="status-msg" class="status-msg">Connexion...</div>
-    <div style="font-family: monospace; font-size: 10px; color: #aaa;">API: SIRI Lite Marketplace</div>
+    <div id="status-msg">Connexion IDFM...</div>
+    <div id="debug-url" style="font-size: 9px; color: #ccc;"></div>
 </footer>
 
 <script>
-    // Configuration stricte selon swagger.json
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; // Ajout du ":" final requis
-    const LINE_REF = 'STIF:Line::C01742:'; // RER A
+    // On utilise SP (Stop Area) car le serveur rejette le Q (Stop Point) avec une erreur 400
+    const MONITORING_REF = 'STIF:StopArea:SP:22105:'; 
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
     async function fetchSchedules() {
-        // Construction de l'URL : host + basePath + path
-        const apiEndpoint = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${encodeURIComponent(MONITORING_REF)}&LineRef=${encodeURIComponent(LINE_REF)}`;
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(apiEndpoint);
+        // Construction de l'URL conforme au Swagger (apikey dans la query pour le proxy)
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
+        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(target);
+        
+        document.getElementById('debug-url').innerText = target;
 
         try {
-            const response = await fetch(proxyUrl, {
-                method: 'GET',
-                headers: {
-                    'apikey': API_KEY, // Requis dans le header selon swagger.json
-                    'Accept': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                document.getElementById('status-msg').innerHTML = `<span style="color:red">Erreur serveur (${response.status})</span>`;
-                return;
-            }
+            const response = await fetch(proxy);
+            if (!response.ok) throw new Error(response.status);
 
             const data = await response.json();
-            
-            // Traitement de la structure SIRI Lite
-            if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
-                renderBoard(data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit);
-                document.getElementById('status-msg').innerHTML = '<span style="color:green">Liaison établie</span>';
+            const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit || [];
+
+            if (visits.length > 0) {
+                renderBoard(visits);
+                document.getElementById('status-msg').innerHTML = '<span class="status-ok">SIEL CONNECTÉ</span>';
             } else {
-                document.getElementById('status-msg').innerText = "Aucun train dans le flux.";
+                document.getElementById('status-msg').innerText = "Pas de trains détectés.";
+                document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train en approche.<br><small>(Vérifiez la direction sur le quai opposé)</small></div>';
             }
         } catch (e) {
-            document.getElementById('status-msg').innerText = "Erreur de connexion réseau.";
+            document.getElementById('status-msg').innerHTML = `<span class="status-err">Erreur ${e.message}</span>`;
         }
     }
 
@@ -107,16 +100,25 @@
         const board = document.getElementById('board');
         board.innerHTML = '';
 
-        // Filtrage direction Ouest (notée "A" pour cette gare)
+        // On trie par heure
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
-            .filter(j => j.DirectionName[0].value === "A")
+            // On filtre intelligemment : on cherche Paris, Cergy, Poissy ou St-Germain
+            .filter(j => {
+                const d = j.DestinationName[0].value.toLowerCase();
+                return d.includes('paris') || d.includes('germain') || d.includes('cergy') || d.includes('poissy') || d.includes('la defense');
+            })
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
 
+        if (trains.length === 0) {
+            board.innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train vers Paris trouvé dans le flux.</div>';
+            return;
+        }
+
         trains.forEach(j => {
             const mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
-            const dest = j.DestinationName[0].value.toUpperCase();
+            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '');
             const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime);
             const diffMin = Math.floor((depTime - new Date()) / 60000);
             
