@@ -26,7 +26,7 @@
             letter-spacing: -0.5px;
         }
 
-        /* --- HEADER --- */
+        /* --- HEADER (Logos CSS) --- */
         header {
             background-color: var(--ratp-bg-main);
             padding: 15px 25px;
@@ -51,7 +51,7 @@
         }
 
         .header-destinations { margin-left: 20px; }
-        .dest-row { font-size: 22px; font-weight: 700; text-transform: uppercase; }
+        .dest-row { font-size: 22px; font-weight: 700; text-transform: uppercase; line-height: 1.2; }
 
         .header-time {
             background-color: var(--ratp-bg-dark); color: white;
@@ -72,7 +72,7 @@
         .mission-code {
             background-color: #e0e0e0; padding: 5px 10px; border-radius: 5px;
             font-size: 16px; font-weight: bold; font-family: monospace;
-            width: fit-content;
+            width: fit-content; text-align: center;
         }
 
         .destination-name { font-size: 35px; font-weight: 700; text-transform: uppercase; }
@@ -134,7 +134,7 @@
     <div class="alert-logo-a">A</div>
     <div style="font-size: 30px;">⚠️</div>
     <div class="alert-text" id="status-bar">
-        Connexion au flux temps réel IDFM en cours...
+        Connexion au flux temps réel IDFM...
     </div>
     <div id="live-indicator" class="status-dot"></div>
 </div>
@@ -144,7 +144,7 @@
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     const STOP_ID = 'STIF:StopPoint:Q:22105:'; // Joinville-le-Pont
     
-    // Utilisation d'un proxy différent si corsproxy.io sature
+    // URL avec clé intégrée + Proxy CORS
     const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
     const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
 
@@ -158,25 +158,36 @@
     async function fetchSchedules() {
         try {
             const response = await fetch(PROXY_URL);
-            if (!response.ok) throw new Error('Serveur IDFM injoignable');
+            
+            // LOGIQUE DÉTECTIVE : On vérifie si le serveur nous rejette
+            if (!response.ok) {
+                document.getElementById('status-bar').innerText = `⚠️ Erreur IDFM : ${response.status} (Vérifiez l'abonnement PRIM)`;
+                document.getElementById('live-indicator').classList.remove('status-live');
+                showDemo();
+                return;
+            }
             
             const data = await response.json();
             
-            // On vérifie que la structure SIRI est présente
-            if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
+            // Navigation dans la structure complexe de l'API IDFM
+            if (data.Siri && 
+                data.Siri.ServiceDelivery.StopMonitoringDelivery[0] && 
+                data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
+                
                 const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
                 renderBoard(visits);
                 
                 document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A. Flux temps réel actif.";
                 document.getElementById('live-indicator').classList.add('status-live');
             } else {
-                throw new Error('Pas de trains trouvés');
+                document.getElementById('status-bar').innerText = "⚠️ Liaison établie mais aucune donnée reçue.";
+                showDemo();
             }
         } catch (error) {
-            console.error("Erreur:", error);
-            document.getElementById('status-bar').innerText = "⚠️ Erreur de liaison API (Vérifiez votre abonnement PRIM). Affichage théorique.";
+            console.error("Erreur réseau:", error);
+            document.getElementById('status-bar').innerText = "⚠️ Impossible de contacter le serveur (Problème Proxy ou Réseau).";
             document.getElementById('live-indicator').classList.remove('status-live');
-            showDemo(); // Mode secours
+            showDemo();
         }
     }
 
@@ -185,15 +196,15 @@
         const board = document.getElementById('board');
         board.innerHTML = '';
 
-        // On filtre : Direction "A" (Paris/Ouest) et on trie par heure
+        // Filtrage : On garde la direction Paris/Ouest (souvent notée "A" dans PRIM pour cette gare)
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
             .filter(j => j.DirectionName[0].value === "A")
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
-            .slice(0, 5); // 5 prochains trains
+            .slice(0, 5);
 
         if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center; margin-top:50px; font-size:24px;">Aucun train prévu actuellement.</div>';
+            board.innerHTML = '<div style="text-align:center; margin-top:50px; font-size:24px;">Aucun train vers l\'Ouest détecté.</div>';
             return;
         }
 
@@ -201,7 +212,7 @@
             const mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
             const dest = j.DestinationName[0].value.toUpperCase();
             
-            // Calcul du temps restant
+            // Calcul des minutes restantes
             const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime);
             const diffMin = Math.floor((depTime - new Date()) / 60000);
             
@@ -232,17 +243,19 @@
         });
     }
 
-    // --- MODE SECOURS (Si l'API dort) ---
+    // --- MODE SECOURS (Données réalistes) ---
     function showDemo() {
         const board = document.getElementById('board');
-        board.innerHTML = '';
+        // On ne vide pas si des données réelles étaient déjà là (on garde les dernières infos)
+        if (board.querySelectorAll('.train-row').length > 0) return;
+
         const faux = [
-            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:7},
-            {m:'NELY', d:'CERGY-LE-HAUT', t:14},
-            {m:'TERI', d:'POISSY', t:25},
-            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:32},
-            {m:'NELY', d:'CERGY-LE-HAUT', t:45}
+            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:5},
+            {m:'NELY', d:'CERGY-LE-HAUT', t:12},
+            {m:'TERI', d:'POISSY', t:24},
+            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:35}
         ];
+        board.innerHTML = '';
         faux.forEach(f => {
             board.innerHTML += `
                 <div class="train-row">
@@ -254,11 +267,11 @@
         });
     }
 
-    // --- INITIALISATION ---
+    // --- LANCEMENT ---
     setInterval(updateClock, 1000);
     updateClock();
     fetchSchedules();
-    setInterval(fetchSchedules, 30000); // Update toutes les 30s
+    setInterval(fetchSchedules, 30000); // Mise à jour auto toutes les 30s
 </script>
 
 </body>
