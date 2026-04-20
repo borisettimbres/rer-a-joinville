@@ -25,7 +25,7 @@
             height: 100vh; overflow: hidden;
         }
 
-        /* --- HEADER --- */
+        /* --- HEADER UX --- */
         header {
             background-color: var(--ratp-bg-main);
             padding: 15px 25px;
@@ -114,7 +114,7 @@
 </header>
 
 <div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Recherche des trains...</div>
+    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Analyse du contrat SIEL...</div>
 </div>
 
 <div class="footer-alert">
@@ -124,14 +124,13 @@
 </div>
 
 <script>
-    // Configuration stricte selon swagger.json
+    // Configuration selon votre Swagger
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; // ID exact Joinville
-    const LINE_REF = 'STIF:Line::C01742:'; // RER A
+    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; 
     
-    // On construit l'URL avec TOUS les paramètres dans la query pour éviter le 400
-    // L'ordre des paramètres peut parfois jouer sur certains proxys
-    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&LineRef=${LINE_REF}&apikey=${API_KEY}`;
+    // --- NOUVELLE SYNTAXE (L'ID est dans l'adresse, pas en paramètre ?) ---
+    // Test de la syntaxe /stop-monitoring/{MonitoringRef} citée dans votre JSON
+    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring/${MONITORING_REF}?apikey=${API_KEY}`;
     
     const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
 
@@ -144,23 +143,43 @@
             const response = await fetch(PROXY_URL);
 
             if (!response.ok) {
-                const errorData = await response.text();
-                console.error("Détail erreur:", errorData);
+                // Si la syntaxe "Chemin" échoue aussi, on tente la syntaxe "Paramètre" en dernier recours
+                if (response.status === 400 || response.status === 404) {
+                    retryWithQueryParam();
+                    return;
+                }
                 throw new Error(`Code ${response.status}`);
             }
             
             const data = await response.json();
+            handleData(data);
             
-            if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
-                renderBoard(data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit);
-                document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A.";
-            } else {
-                document.getElementById('status-bar').innerText = "⚠️ Aucune circulation vers Paris actuellement.";
-                showNoTrains();
-            }
         } catch (error) {
-            console.error(error);
-            document.getElementById('status-bar').innerText = `⚠️ Erreur de liaison (${error.message}). Vérification des paramètres...`;
+            document.getElementById('status-bar').innerText = `⚠️ Erreur de liaison (${error.message}).`;
+        }
+    }
+
+    // Fonction de secours si la première syntaxe échoue
+    async function retryWithQueryParam() {
+        console.log("Tentative avec syntaxe alternative...");
+        const altTarget = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
+        const altProxy = 'https://corsproxy.io/?' + encodeURIComponent(altTarget);
+        
+        try {
+            const response = await fetch(altProxy);
+            const data = await response.json();
+            handleData(data);
+        } catch (e) {
+            document.getElementById('status-bar').innerText = "⚠️ Identifiant gare inconnu (Code 400).";
+        }
+    }
+
+    function handleData(data) {
+        if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
+            renderBoard(data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit);
+            document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A.";
+        } else {
+            document.getElementById('status-bar').innerText = "⚠️ Aucune donnée reçue pour cet arrêt.";
         }
     }
 
@@ -168,17 +187,11 @@
         const board = document.getElementById('board');
         board.innerHTML = '';
 
+        // On ne filtre pas la direction tout de suite pour être sûr de voir des données
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
-            // On filtre pour la direction OUEST (Paris)
-            .filter(j => j.DirectionName[0].value === "A")
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
-
-        if (trains.length === 0) {
-            showNoTrains();
-            return;
-        }
 
         trains.forEach(j => {
             const mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
@@ -203,10 +216,6 @@
                     </div>
                 </div>`;
         });
-    }
-
-    function showNoTrains() {
-        document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Aucun train à quai ou à l\'approche.</div>';
     }
 
     setInterval(updateClock, 1000);
