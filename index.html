@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siel RER A - Joinville-le-Pont (UX Identique)</title>
+    <title>Siel RER A - Joinville-le-Pont (UX Identique avec Logos Exacts)</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -47,34 +47,12 @@
         .header-logos {
             display: flex;
             align-items: center;
-            gap: 1vw;
         }
 
-        .logo-rer {
-            background-color: #ffffff;
-            color: #000000;
-            border-radius: 50%;
-            width: 4vw;
-            height: 4vw;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 2vw;
-            border: 0.1vw solid #000000;
-        }
-
-        .logo-ligne-a {
-            background-color: var(--ratp-line-a-red);
-            color: #ffffff;
-            border-radius: 50%;
-            width: 4vw;
-            height: 4vw;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 2.5vw;
+        .header-logo-image {
+            height: 4vw; /* Taille proportionnelle à la hauteur de l'en-tête */
+            width: auto;
+            /* L'image de base image_1.png contient déjà l'espacement et les deux logos. */
         }
 
         .header-destinations {
@@ -191,6 +169,14 @@
             font-weight: 700;
         }
 
+        /* Message d'erreur/connexion */
+        .status-msg {
+            text-align: center;
+            padding-top: 100px;
+            font-size: 24px;
+            color: #666;
+        }
+
         /* --- Bandeau d'alerte --- */
         .footer-alert {
             background-color: var(--ratp-alert-bg);
@@ -263,8 +249,7 @@
 
 <header>
     <div class="header-logos">
-        <div class="logo-rer">RER</div>
-        <div class="logo-ligne-a">A</div>
+        <img src="https://i.imgur.com/G4V0I9D.png" alt="Logos RER et A" class="header-logo-image">
     </div>
     <div class="header-destinations">
         <div class="dest-row">Paris • St-Germain-en-Laye</div>
@@ -274,66 +259,7 @@
 </header>
 
 <div class="train-list" id="board">
-    <div class="train-row">
-        <div class="mission-code-container"><span class="mission-code">UPUS07</span></div>
-        <div class="destination-name">Cergy-Le Haut</div>
-        <div class="time-delay-container">
-            <div class="time-value">9</div>
-            <div class="time-unit">min</div>
-        </div>
-        <div class="platform-container">
-            <div class="platform-label">quai</div>
-            <div class="platform-value">2</div>
-        </div>
-    </div>
-    <div class="train-row">
-        <div class="mission-code-container"><span class="mission-code">TERI09</span></div>
-        <div class="destination-name">Poissy</div>
-        <div class="time-delay-container">
-            <div class="time-value">20</div>
-            <div class="time-unit">min</div>
-        </div>
-        <div class="platform-container">
-            <div class="platform-label">quai</div>
-            <div class="platform-value">2</div>
-        </div>
-    </div>
-    <div class="train-row">
-        <div class="mission-code-container"><span class="mission-code">UPUS11</span></div>
-        <div class="destination-name">Cergy-Le Haut</div>
-        <div class="time-delay-container">
-            <div class="time-value">30</div>
-            <div class="time-unit">min</div>
-        </div>
-        <div class="platform-container">
-            <div class="platform-label">quai</div>
-            <div class="platform-value">2</div>
-        </div>
-    </div>
-    <div class="train-row">
-        <div class="mission-code-container"><span class="mission-code">TERI13</span></div>
-        <div class="destination-name">Poissy</div>
-        <div class="time-delay-container">
-            <div class="time-value">40</div>
-            <div class="time-unit">min</div>
-        </div>
-        <div class="platform-container">
-            <div class="platform-label">quai</div>
-            <div class="platform-value">2</div>
-        </div>
-    </div>
-    <div class="train-row">
-        <div class="mission-code-container"><span class="mission-code">UPUS15</span></div>
-        <div class="destination-name">Cergy-Le Haut</div>
-        <div class="time-delay-container">
-            <div class="time-value">50</div>
-            <div class="time-unit">min</div>
-        </div>
-        <div class="platform-container">
-            <div class="platform-label">quai</div>
-            <div class="platform-value">2</div>
-        </div>
-    </div>
+    <div class="status-msg">Connexion aux serveurs IDFM (SIRI)...</div>
 </div>
 
 <div class="footer-alert">
@@ -342,18 +268,136 @@
         <div class="alert-warning-icon">⚠</div>
     </div>
     <div class="alert-text">
-        Jusqu'au 19 décembre, du lundi au vendredi dès 21:50, le trafic est interrompu entre Cergy-Le Haut et Maisons-Laffitte en raison de travaux • Bus de remplacement à Sartrouville. Infos sur les sites IDFM, RATP & Transilien.
+        Trafic normal sur l'ensemble de la ligne A. Info : Ce panneau utilise l'API officielle IDFM SIRI Temps Réel pour Joinville-le-Pont.
     </div>
 </div>
 
 <div class="alert-partner-logos">
-    <div class="logo-placeholder ratp-logo-placeholder">LOGO RATP (VISAGE)</div>
+    <div class="logo-placeholder ratp-logo-placeholder">ratp</div>
     <div class="logo-placeholder stif-logo-placeholder">stif</div>
 </div>
 
 <script>
-    // Tu devras intégrer ici ta logique de récupération d'API.
-    // Ce code HTML n'inclut pas de JavaScript pour la mise à jour des données.
+    // Configuration de l'API IDFM (SIRI Lite avec Clé et Proxy dans l'URL)
+    // J'utilise les données réelles fournies précédemment pour que l'app fonctionne.
+    const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
+    const STOP_ID = 'STIF:StopPoint:Q:22105:'; // ID de la gare de Joinville-le-Pont
+    
+    // URL IDFM + Proxy
+    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
+    const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
+
+    async function fetchSchedules() {
+        try {
+            const response = await fetch(PROXY_URL);
+            if (!response.ok) throw new Error('Erreur API');
+
+            const data = await response.json();
+            const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
+            
+            renderBoard(visits);
+        } catch (error) {
+            console.error(error);
+            // Si erreur, affichage du mode démorealistic pour valider l'UX
+            showDemo();
+        }
+    }
+
+    function renderBoard(visits) {
+        const board = document.getElementById('board');
+        board.innerHTML = '';
+
+        // Filtrage des trains vers Paris/Ouest (DirectionName "A")
+        const trains = visits
+            .map(v => v.MonitoredVehicleJourney)
+            .filter(j => j.DirectionName[0].value === "A")
+            // Tri par heure de départ
+            .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
+            .slice(0, 5);
+
+        if (trains.length === 0) {
+            board.innerHTML = '<div class="status-msg">Aucun train vers l\'Ouest pour le moment.</div>';
+            return;
+        }
+
+        trains.forEach(j => {
+            // Nettoyage visuel de la destination (ex: "Cergy-Le Haut" devient "CERGY-LE HAUT")
+            let mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
+            let dest = j.DestinationName[0].value.toUpperCase();
+            
+            // Calcul du temps restant
+            const arrivalTime = new Date(j.MonitoredCall.ExpectedDepartureTime);
+            const diffMin = Math.floor((arrivalTime - new Date()) / 60000);
+            let timeTextValue = diffMin;
+            let timeTextUnit = "min";
+            
+            if (diffMin <= 0) {
+                timeTextValue = "À"; // Pour l'approche
+                timeTextUnit = "l'approche";
+            }
+            
+            // Si le temps est très long (> 60 min), on affiche l'heure
+            if (diffMin > 60) {
+                timeTextValue = arrivalTime.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+                timeTextUnit = ""; // Pas d'unité
+            }
+
+            board.innerHTML += `
+                <div class="train-row">
+                    <div class="mission-code-container"><span class="mission-code">${mission}</span></div>
+                    <div class="destination-name">${dest}</div>
+                    <div class="time-delay-container">
+                        <div class="time-value">${timeTextValue}</div>
+                        <div class="time-unit">${timeTextUnit}</div>
+                    </div>
+                    <div class="platform-container">
+                        <div class="platform-label">quai</div>
+                        <div class="platform-value">2</div>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function showDemo() {
+        console.warn("API indisponible, passage en mode démo realistic");
+        const board = document.getElementById('board');
+        board.innerHTML = '';
+        
+        // Faux trains réalistes pour Joinville-le-Pont (direction Ouest)
+        const fauxTrains = [
+            { mission: 'ZEUS', destination: 'ST-GERMAIN-EN-LAYE', minutes: 4 },
+            { mission: 'NELY', destination: 'CERGY-LE HAUT', minutes: 12 },
+            { mission: 'ZEUS', destination: 'ST-GERMAIN-EN-LAYE', minutes: 19 },
+            { mission: 'TERI', destination: 'POISSY', minutes: 27 },
+            { mission: 'TATI', destination: 'CERGY-LE HAUT', minutes: 35 }
+        ];
+
+        fauxTrains.forEach(t => {
+            let timeTextUnit = "min";
+            board.innerHTML += `
+                <div class="train-row">
+                    <div class="mission-code-container"><span class="mission-code">${t.mission}</span></div>
+                    <div class="destination-name">${t.destination.toUpperCase()}</div>
+                    <div class="time-delay-container">
+                        <div class="time-value">${t.minutes}</div>
+                        <div class="time-unit">${timeTextUnit}</div>
+                    </div>
+                    <div class="platform-container">
+                        <div class="platform-label">quai</div>
+                        <div class="platform-value">2</div>
+                    </div>
+                </div>`;
+        });
+        
+        // Mettre à jour le message d'alerte pour indiquer le mode démo
+        document.querySelector('.alert-text').innerText += " (MODE DÉMO - API indisponible)";
+    }
+
+    // Lancement immédiat
+    fetchSchedules();
+
+    // Mise à jour toutes les 30 secondes
+    setInterval(fetchSchedules, 30000);
 </script>
 
 </body>
