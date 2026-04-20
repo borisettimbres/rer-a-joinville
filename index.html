@@ -26,7 +26,7 @@
             letter-spacing: -0.5px;
         }
 
-        /* --- HEADER (Logos CSS) --- */
+        /* --- HEADER --- */
         header {
             background-color: var(--ratp-bg-main);
             padding: 15px 25px;
@@ -126,7 +126,7 @@
 
 <div class="train-list" id="board">
     <div style="text-align:center; margin-top:100px; font-size:24px; color:#999;">
-        Initialisation du système SIEL...
+        Système SIEL en attente de flux...
     </div>
 </div>
 
@@ -134,7 +134,7 @@
     <div class="alert-logo-a">A</div>
     <div style="font-size: 30px;">⚠️</div>
     <div class="alert-text" id="status-bar">
-        Connexion au flux temps réel IDFM...
+        Tentative de connexion aux serveurs SIRI-Lite...
     </div>
     <div id="live-indicator" class="status-dot"></div>
 </div>
@@ -142,10 +142,10 @@
 <script>
     // --- CONFIGURATION ---
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const STOP_ID = 'STIF:StopPoint:Q:22105:'; // Joinville-le-Pont
-    
-    // URL avec clé intégrée + Proxy CORS
-    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
+    const STOP_ID = 'STIF:StopPoint:Q:22105'; // Suppression du ":" final pour plus de stabilité
+
+    // --- CORRECTION URL (Ajout de /siri-lite/ dans le chemin) ---
+    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/v1/siri-lite/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
     const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
 
     // --- HORLOGE ---
@@ -159,9 +159,9 @@
         try {
             const response = await fetch(PROXY_URL);
             
-            // LOGIQUE DÉTECTIVE : On vérifie si le serveur nous rejette
             if (!response.ok) {
-                document.getElementById('status-bar').innerText = `⚠️ Erreur IDFM : ${response.status} (Vérifiez l'abonnement PRIM)`;
+                // Affiche le code d'erreur réel (404, 401, etc.)
+                document.getElementById('status-bar').innerText = `⚠️ Liaison interrompue (Code ${response.status}). Vérifiez l'URL ou la Clé.`;
                 document.getElementById('live-indicator').classList.remove('status-live');
                 showDemo();
                 return;
@@ -169,34 +169,33 @@
             
             const data = await response.json();
             
-            // Navigation dans la structure complexe de l'API IDFM
             if (data.Siri && 
+                data.Siri.ServiceDelivery && 
                 data.Siri.ServiceDelivery.StopMonitoringDelivery[0] && 
                 data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
                 
                 const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
                 renderBoard(visits);
                 
-                document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A. Flux temps réel actif.";
+                document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A. Flux SIRI-Lite actif.";
                 document.getElementById('live-indicator').classList.add('status-live');
             } else {
-                document.getElementById('status-bar').innerText = "⚠️ Liaison établie mais aucune donnée reçue.";
+                document.getElementById('status-bar').innerText = "⚠️ Serveur contacté mais aucun train n'est recensé.";
                 showDemo();
             }
         } catch (error) {
             console.error("Erreur réseau:", error);
-            document.getElementById('status-bar').innerText = "⚠️ Impossible de contacter le serveur (Problème Proxy ou Réseau).";
+            document.getElementById('status-bar').innerText = "⚠️ Impossible de joindre le proxy. Mode local activé.";
             document.getElementById('live-indicator').classList.remove('status-live');
             showDemo();
         }
     }
 
-    // --- AFFICHAGE ---
     function renderBoard(visits) {
         const board = document.getElementById('board');
         board.innerHTML = '';
 
-        // Filtrage : On garde la direction Paris/Ouest (souvent notée "A" dans PRIM pour cette gare)
+        // Filtrage direction Paris (A)
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
             .filter(j => j.DirectionName[0].value === "A")
@@ -204,15 +203,13 @@
             .slice(0, 5);
 
         if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center; margin-top:50px; font-size:24px;">Aucun train vers l\'Ouest détecté.</div>';
+            board.innerHTML = '<div style="text-align:center; margin-top:50px; font-size:24px;">Aucun train vers Paris actuellement.</div>';
             return;
         }
 
         trains.forEach(j => {
             const mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
             const dest = j.DestinationName[0].value.toUpperCase();
-            
-            // Calcul des minutes restantes
             const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime);
             const diffMin = Math.floor((depTime - new Date()) / 60000);
             
@@ -243,17 +240,14 @@
         });
     }
 
-    // --- MODE SECOURS (Données réalistes) ---
     function showDemo() {
         const board = document.getElementById('board');
-        // On ne vide pas si des données réelles étaient déjà là (on garde les dernières infos)
         if (board.querySelectorAll('.train-row').length > 0) return;
 
         const faux = [
-            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:5},
-            {m:'NELY', d:'CERGY-LE-HAUT', t:12},
-            {m:'TERI', d:'POISSY', t:24},
-            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:35}
+            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:6},
+            {m:'NELY', d:'CERGY-LE-HAUT', t:14},
+            {m:'TERI', d:'POISSY', t:26}
         ];
         board.innerHTML = '';
         faux.forEach(f => {
@@ -267,11 +261,10 @@
         });
     }
 
-    // --- LANCEMENT ---
     setInterval(updateClock, 1000);
     updateClock();
     fetchSchedules();
-    setInterval(fetchSchedules, 30000); // Mise à jour auto toutes les 30s
+    setInterval(fetchSchedules, 30000);
 </script>
 
 </body>
