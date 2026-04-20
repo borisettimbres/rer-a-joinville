@@ -25,7 +25,7 @@
             height: 100vh; overflow: hidden;
         }
 
-        /* --- HEADER (UX Photo & Logos) --- */
+        /* --- HEADER --- */
         header {
             background-color: var(--ratp-bg-main);
             padding: 15px 25px;
@@ -57,7 +57,7 @@
             padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700;
         }
 
-        /* --- LISTE DES TRAINS (Structure Photo) --- */
+        /* --- LISTE DES TRAINS --- */
         .train-list { flex-grow: 1; padding: 0 25px; }
 
         .train-row {
@@ -71,6 +71,7 @@
         .mission-code {
             background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px;
             font-size: 15px; font-weight: bold; font-family: monospace;
+            text-align: center;
         }
 
         .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; }
@@ -123,12 +124,15 @@
 </div>
 
 <script>
-    // Configuration selon le swagger.json
+    // Configuration stricte selon swagger.json
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; 
+    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; // ID exact Joinville
+    const LINE_REF = 'STIF:Line::C01742:'; // RER A
     
-    // Construction de l'URL avec apikey en paramètre pour plus de fiabilité avec le proxy
-    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
+    // On construit l'URL avec TOUS les paramètres dans la query pour éviter le 400
+    // L'ordre des paramètres peut parfois jouer sur certains proxys
+    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&LineRef=${LINE_REF}&apikey=${API_KEY}`;
+    
     const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
 
     function updateClock() {
@@ -137,26 +141,26 @@
 
     async function fetchSchedules() {
         try {
-            // On envoie aussi la clé dans le header comme demandé par le contrat
-            const response = await fetch(PROXY_URL, {
-                method: 'GET',
-                headers: { 'apikey': API_KEY }
-            });
+            const response = await fetch(PROXY_URL);
 
-            if (!response.ok) throw new Error(`Code ${response.status}`);
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error("Détail erreur:", errorData);
+                throw new Error(`Code ${response.status}`);
+            }
             
             const data = await response.json();
             
-            // Traitement du format SIRI Lite
             if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
                 renderBoard(data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit);
                 document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A.";
             } else {
-                document.getElementById('status-bar').innerText = "⚠️ Aucune donnée reçue (Pas de trains).";
+                document.getElementById('status-bar').innerText = "⚠️ Aucune circulation vers Paris actuellement.";
+                showNoTrains();
             }
         } catch (error) {
             console.error(error);
-            document.getElementById('status-bar').innerText = `⚠️ Erreur de liaison API (${error.message}). Vérifiez votre compte PRIM.`;
+            document.getElementById('status-bar').innerText = `⚠️ Erreur de liaison (${error.message}). Vérification des paramètres...`;
         }
     }
 
@@ -166,10 +170,15 @@
 
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
-            // On filtre pour la direction Paris/Ouest (DirectionName A)
+            // On filtre pour la direction OUEST (Paris)
             .filter(j => j.DirectionName[0].value === "A")
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
+
+        if (trains.length === 0) {
+            showNoTrains();
+            return;
+        }
 
         trains.forEach(j => {
             const mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
@@ -194,6 +203,10 @@
                     </div>
                 </div>`;
         });
+    }
+
+    function showNoTrains() {
+        document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Aucun train à quai ou à l\'approche.</div>';
     }
 
     setInterval(updateClock, 1000);
