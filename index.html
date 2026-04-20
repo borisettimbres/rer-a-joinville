@@ -30,7 +30,7 @@
             width: 60px; height: 60px; display: flex; align-items: center;
             justify-content: center; font-weight: bold; font-size: 40px; margin-right: 20px;
         }
-        .station-name { font-size: 32px; text-transform: uppercase; font-weight: 900; }
+        .station-name { font-size: 32px; text-transform: uppercase; font-weight: 900; line-height: 1.2; }
         .train-list { flex-grow: 1; padding: 10px 40px; }
         .train-row {
             display: grid; grid-template-columns: 140px 1fr 220px;
@@ -53,37 +53,38 @@
 </header>
 
 <div class="train-list" id="board">
-    <div class="status-msg">Connexion aux serveurs IDFM...</div>
+    <div class="status-msg">Connexion aux serveurs IDFM (SIEL)...</div>
 </div>
 
 <footer>
-    <div class="marquee">⚠️ Trafic normal sur l'ensemble de la ligne A. Info : Ce panneau utilise l'API officielle IDFM Temps Réel.</div>
+    <div class="marquee">⚠️ Trafic normal sur l'ensemble de la ligne A. Bienvenue à bord. Attention à la marche en descendant du train.</div>
 </footer>
 
 <script>
-    const API_KEY = '4YVhcO9WOzoo7McytyUOXFynlWI2o158';
-    const STOP_ID = 'STIF:StopPoint:Q:22105:'; // Joinville-le-Pont
-    
-    // On utilise un proxy pour éviter l'erreur CORS sur iPad
-    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}`;
+    const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
+    const STOP_ID = 'STIF:StopPoint:Q:22105:'; 
+
+    // On combine la clé dans l'URL + le proxy pour une compatibilité totale sur iPad
+    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
     const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
 
     async function fetchSchedules() {
         try {
-            const response = await fetch(PROXY_URL, {
-                method: 'GET',
-                headers: { 'apikey': API_KEY }
-            });
-
-            if (!response.ok) throw new Error('Erreur API');
+            const response = await fetch(PROXY_URL);
+            if (!response.ok) throw new Error('Erreur Réseau ou Clé');
 
             const data = await response.json();
-            const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
             
-            renderBoard(visits);
+            if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
+                const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
+                renderBoard(visits);
+            } else {
+                document.getElementById('board').innerHTML = '<div class="status-msg">Aucun train en approche</div>';
+            }
         } catch (error) {
             console.error(error);
-            document.getElementById('board').innerHTML = '<div class="status-msg" style="color:#e3051c">Erreur de liaison (CORS ou Clé API)</div>';
+            document.getElementById('board').innerHTML = 
+                `<div class="status-msg" style="color:#e3051c">Erreur de liaison API<br><small style="font-size:14px; color:#666;">Vérifiez votre abonnement "Requête Unitaire" sur PRIM</small></div>`;
         }
     }
 
@@ -91,20 +92,21 @@
         const board = document.getElementById('board');
         board.innerHTML = '';
 
-        // Filtrage des trains vers Paris/Ouest (DirectionName "A")
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
+            // On ne garde que le sens vers Paris (A)
             .filter(j => j.DirectionName[0].value === "A")
+            // Tri par heure de départ
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
 
         if (trains.length === 0) {
-            board.innerHTML = '<div class="status-msg">Aucun train vers l\'Ouest détecté.</div>';
+            board.innerHTML = '<div class="status-msg">Aucun train vers l\'Ouest pour le moment</div>';
             return;
         }
 
         trains.forEach(j => {
-            const mission = j.JourneyNote[0].value || '----';
+            const mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
             const dest = j.DestinationName[0].value;
             const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime);
             
