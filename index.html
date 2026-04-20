@@ -25,15 +25,15 @@
         .header-time { background-color: var(--ratp-bg-dark); color: white; padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700; }
         .train-list { flex-grow: 1; padding: 0 25px; }
         .train-row { display: grid; grid-template-columns: 130px 1fr 140px 100px; align-items: center; padding: 18px 0; border-bottom: 2px solid var(--ratp-border-gray); }
-        .mission-code { background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace; }
-        .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; }
+        .mission-code { background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace; text-align: center; width: 80px; }
+        .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .time-box { background-color: var(--ratp-bg-dark); color: var(--ratp-text-yellow); border-radius: 6px; text-align: center; padding: 6px; width: 100px; }
         .time-box .val { font-size: 38px; font-weight: 700; display: block; line-height: 0.9; }
         .time-box .unit { font-size: 13px; text-transform: lowercase; }
         .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 6px; text-align: center; width: 65px; margin-left: auto; }
         .quai-box .label { font-size: 11px; display: block; }
         .quai-box .val { font-size: 26px; font-weight: 700; }
-        footer { background: white; padding: 15px 30px; border-top: 2px solid var(--ratp-border-gray); font-size: 14px; display: flex; justify-content: space-between; }
+        footer { background: white; padding: 15px 30px; border-top: 2px solid var(--ratp-border-gray); font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
         .status-ok { color: #4caf50; font-weight: bold; }
         .status-error { color: #f44336; font-weight: bold; }
     </style>
@@ -47,69 +47,61 @@
     </div>
     <div class="header-destinations">
         <div class="dest-row">Joinville-le-Pont</div>
-        <div class="dest-row" style="font-size: 14px; color: var(--ratp-line-a-red);">Direction Paris / Ouest</div>
+        <div class="dest-row" style="font-size: 14px; color: var(--ratp-line-a-red);">DIRECTION PARIS / OUEST</div>
     </div>
     <div class="header-time" id="clock">--:--</div>
 </header>
 
 <div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Recherche de la syntaxe valide...</div>
+    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Connexion SIEL...</div>
 </div>
 
 <footer>
-    <div id="status-msg">Initialisation...</div>
+    <div id="status-msg">Démarrage...</div>
     <div id="api-mode" style="font-family: monospace; font-size: 10px; color: #aaa;">MODE: --</div>
 </footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const STOP_ID = 'STIF:StopPoint:Q:22105:'; // L'ID standard avec les deux points
-    const LINE_ID = 'STIF:Line::C01742:'; // RER A (Identifiant CodifLigne)
+    const GARE_ID = 'STIF:StopPoint:Q:22105:';
+    const LIGNE_ID = 'STIF:Line::C01742:';
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
-    // Fonction principale qui va tester les différentes syntaxes du Swagger
     async function fetchSchedules() {
-        // SYNTAXE 1 : Paramètres de Query (Standard Marketplace)
-        // On inclut LineRef comme suggéré par le Swagger pour éviter le 400
-        const urlQuery = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&LineRef=${LINE_ID}&apikey=${API_KEY}`;
+        const board = document.getElementById('board');
+        const status = document.getElementById('status-msg');
+        const mode = document.getElementById('api-mode');
+
+        // On essaie la syntaxe Query (la plus standard)
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${GARE_ID}&LineRef=${LIGNE_ID}&apikey=${API_KEY}`;
+        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(target);
         
-        // SYNTAXE 2 : Path Parameter (Suggéré par la description du Swagger)
-        const urlPath = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring/${STOP_ID}?apikey=${API_KEY}`;
-
-        // On essaie d'abord la Query
-        let success = await tryFetch(urlQuery, "QUERY");
-        
-        // Si ça échoue avec 400, on tente le Path
-        if (!success) {
-            success = await tryFetch(urlPath, "PATH");
-        }
-
-        if (!success) {
-            document.getElementById('status-msg').innerHTML = '<span class="status-error">Erreur critique : Syntaxe rejetée par IDFM.</span>';
-        }
-    }
-
-    async function tryFetch(targetUrl, modeName) {
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
-        document.getElementById('api-mode').innerText = `MODE: ${modeName}`;
+        mode.innerText = "MODE: QUERY";
 
         try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) return false; // On retourne false pour tenter l'autre mode
+            const response = await fetch(proxy);
+            
+            if (!response.ok) {
+                status.innerHTML = `<span class="status-error">Erreur serveur (${response.status})</span>`;
+                return;
+            }
 
             const data = await response.json();
             
             if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
-                renderBoard(data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit);
-                document.getElementById('status-msg').innerHTML = '<span class="status-ok">Flux Temps Réel Connecté</span>';
-                return true;
+                const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
+                renderBoard(visits);
+                status.innerHTML = '<span class="status-ok">Flux Direct Actif</span>';
+            } else {
+                status.innerText = "Aucun train en approche.";
+                board.innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Pas de trains vers Paris actuellement.</div>';
             }
-            return false;
         } catch (e) {
-            return false;
+            status.innerHTML = '<span class="status-error">Liaison API interrompue</span>';
+            console.error(e);
         }
     }
 
@@ -119,7 +111,7 @@
 
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
-            // On filtre pour la direction OUEST (Paris)
+            // On filtre pour la direction Ouest (Paris)
             .filter(j => j.DirectionName[0].value === "A")
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
@@ -154,10 +146,11 @@
         });
     }
 
-    setInterval(updateClock, 1000);
+    // Lancement
     updateClock();
+    setInterval(updateClock, 1000);
     fetchSchedules();
-    setInterval(fetchSchedules, 30s);
+    setInterval(fetchSchedules, 30000); // 30 secondes en millisecondes
 </script>
 </body>
 </html>
