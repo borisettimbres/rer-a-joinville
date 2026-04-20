@@ -33,9 +33,7 @@
         .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 6px; text-align: center; width: 65px; margin-left: auto; }
         .quai-box .label { font-size: 11px; display: block; }
         .quai-box .val { font-size: 26px; font-weight: 700; }
-        footer { background: white; padding: 10px 30px; border-top: 2px solid var(--ratp-border-gray); font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
-        .status-ok { color: #4caf50; font-weight: bold; }
-        .status-err { color: #c0333a; font-weight: bold; }
+        footer { background: #eee; padding: 10px 20px; border-top: 2px solid #ccc; font-size: 11px; color: #666; }
     </style>
 </head>
 <body>
@@ -47,52 +45,55 @@
     </div>
     <div class="header-destinations">
         <div class="dest-row">Joinville-le-Pont</div>
-        <div class="dest-row" style="font-size: 14px; color: var(--ratp-line-a-red);">Direction Paris / Ouest</div>
+        <div class="dest-row" style="font-size: 14px; color: var(--ratp-line-a-red);">DIRECTION PARIS / OUEST</div>
     </div>
     <div class="header-time" id="clock">--:--</div>
 </header>
 
 <div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Chargement du SIEL...</div>
+    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Tentative de connexion...</div>
 </div>
 
-<footer>
-    <div id="status-msg">Connexion IDFM...</div>
-    <div id="debug-url" style="font-size: 9px; color: #ccc;"></div>
-</footer>
+<footer id="debug-log">Initialisation du script...</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    // On utilise SP (Stop Area) car le serveur rejette le Q (Stop Point) avec une erreur 400
-    const MONITORING_REF = 'STIF:StopArea:SP:22105:'; 
+    // Identifiant Zone d'arrêt (souvent plus stable sur la V1)
+    const STOP_ID = 'STIF:StopArea:SP:22105'; 
+
+    function log(msg) { document.getElementById('debug-log').innerText = msg; }
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
     async function fetchSchedules() {
-        // Construction de l'URL conforme au Swagger (apikey dans la query pour le proxy)
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
+        // IMPORTANT : Utilisation de /v1/ qui est le standard Marketplace
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
         const proxy = 'https://corsproxy.io/?' + encodeURIComponent(target);
-        
-        document.getElementById('debug-url').innerText = target;
+
+        log("Appel : " + STOP_ID + " (V1)");
 
         try {
             const response = await fetch(proxy);
-            if (!response.ok) throw new Error(response.status);
+            
+            if (!response.ok) {
+                log(`Erreur ${response.status} sur ${STOP_ID}`);
+                return;
+            }
 
             const data = await response.json();
-            const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit || [];
-
-            if (visits.length > 0) {
+            
+            if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
+                const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
                 renderBoard(visits);
-                document.getElementById('status-msg').innerHTML = '<span class="status-ok">SIEL CONNECTÉ</span>';
+                log("Flux SIRI Lite Connecté - " + visits.length + " trains");
             } else {
-                document.getElementById('status-msg').innerText = "Pas de trains détectés.";
-                document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train en approche.<br><small>(Vérifiez la direction sur le quai opposé)</small></div>';
+                log("Réponse vide du serveur.");
+                document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train dans le flux.</div>';
             }
         } catch (e) {
-            document.getElementById('status-msg').innerHTML = `<span class="status-err">Erreur ${e.message}</span>`;
+            log("Erreur réseau ou Proxy bloqué.");
         }
     }
 
@@ -100,19 +101,18 @@
         const board = document.getElementById('board');
         board.innerHTML = '';
 
-        // On trie par heure
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
-            // On filtre intelligemment : on cherche Paris, Cergy, Poissy ou St-Germain
+            // Filtre vers Paris/Ouest
             .filter(j => {
                 const d = j.DestinationName[0].value.toLowerCase();
-                return d.includes('paris') || d.includes('germain') || d.includes('cergy') || d.includes('poissy') || d.includes('la defense');
+                return d.includes('paris') || d.includes('germain') || d.includes('cergy') || d.includes('poissy') || d.includes('defense');
             })
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
 
         if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train vers Paris trouvé dans le flux.</div>';
+            board.innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Pas de trains vers Paris trouvés.</div>';
             return;
         }
 
