@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siel RER A - Live Joinville</title>
+    <title>Siel RER A - Joinville</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -23,7 +23,6 @@
             margin: 0; padding: 0;
             display: flex; flex-direction: column;
             height: 100vh; overflow: hidden;
-            letter-spacing: -0.5px;
         }
 
         /* --- HEADER --- */
@@ -37,25 +36,26 @@
         }
 
         .header-logos { display: flex; align-items: center; gap: 12px; }
-
+        
+        /* Logos basés sur votre image de référence */
         .logo-rer {
-            border: 4px solid #1a1a1a; background: white; border-radius: 14px;
-            width: 60px; height: 60px; display: flex; align-items: center;
-            justify-content: center; font-size: 24px; font-weight: 900;
+            border: 4px solid #1a1a1a; background: white; border-radius: 12px;
+            width: 55px; height: 55px; display: flex; align-items: center;
+            justify-content: center; font-size: 22px; font-weight: 900;
         }
 
         .logo-a {
-            background-color: var(--ratp-line-a-red); border-radius: 14px;
-            width: 70px; height: 70px; display: flex; align-items: center;
-            justify-content: center; font-size: 50px; font-weight: 900; color: white;
+            background-color: var(--ratp-line-a-red); border-radius: 12px;
+            width: 65px; height: 65px; display: flex; align-items: center;
+            justify-content: center; font-size: 45px; font-weight: 900; color: white;
         }
 
         .header-destinations { margin-left: 20px; }
-        .dest-row { font-size: 22px; font-weight: 700; text-transform: uppercase; line-height: 1.2; }
+        .dest-row { font-size: 22px; font-weight: 700; text-transform: uppercase; line-height: 1.1; }
 
         .header-time {
             background-color: var(--ratp-bg-dark); color: white;
-            padding: 10px 20px; border-radius: 10px; font-size: 30px; font-weight: 700;
+            padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700;
         }
 
         /* --- LISTE DES TRAINS --- */
@@ -63,51 +63,43 @@
 
         .train-row {
             display: grid;
-            grid-template-columns: 120px 1fr 140px 100px;
+            grid-template-columns: 130px 1fr 140px 100px;
             align-items: center;
-            padding: 20px 0;
+            padding: 18px 0;
             border-bottom: 2px solid var(--ratp-border-gray);
         }
 
         .mission-code {
-            background-color: #e0e0e0; padding: 5px 10px; border-radius: 5px;
-            font-size: 16px; font-weight: bold; font-family: monospace;
-            width: fit-content; text-align: center;
+            background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px;
+            font-size: 15px; font-weight: bold; font-family: monospace;
         }
 
-        .destination-name { font-size: 35px; font-weight: 700; text-transform: uppercase; }
+        .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; }
 
         .time-box {
             background-color: var(--ratp-bg-dark); color: var(--ratp-text-yellow);
-            border-radius: 8px; text-align: center; padding: 8px; width: 110px;
+            border-radius: 6px; text-align: center; padding: 6px; width: 100px;
         }
-        .time-box .val { font-size: 42px; font-weight: 700; display: block; line-height: 0.9; }
-        .time-box .unit { font-size: 14px; text-transform: lowercase; }
+        .time-box .val { font-size: 38px; font-weight: 700; display: block; line-height: 0.9; }
+        .time-box .unit { font-size: 13px; text-transform: lowercase; }
 
         .quai-box {
             background-color: var(--ratp-quai-gray); border: 1px solid #78909c;
-            border-radius: 8px; text-align: center; width: 70px; margin-left: auto;
+            border-radius: 6px; text-align: center; width: 65px; margin-left: auto;
         }
-        .quai-box .label { font-size: 12px; display: block; }
-        .quai-box .val { font-size: 30px; font-weight: 700; }
+        .quai-box .label { font-size: 11px; display: block; }
+        .quai-box .val { font-size: 26px; font-weight: 700; }
 
         /* --- FOOTER --- */
         .footer-alert {
-            background: white; padding: 20px 30px;
+            background: white; padding: 15px 30px;
             display: flex; align-items: center; gap: 20px;
             border-top: 2px solid var(--ratp-border-gray);
         }
 
-        .alert-logo-a {
-            background: var(--ratp-line-a-red); color: white;
-            border-radius: 50%; width: 35px; height: 35px;
-            display: flex; align-items: center; justify-content: center; font-weight: bold;
-        }
-
-        .alert-text { font-size: 16px; font-weight: 400; flex: 1; }
-
-        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #ccc; }
-        .status-live { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
+        .alert-text { font-size: 15px; line-height: 1.3; flex: 1; }
+        .status-light { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+        .online { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
     </style>
 </head>
 <body>
@@ -125,68 +117,55 @@
 </header>
 
 <div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:24px; color:#999;">
-        Système SIEL en attente de flux...
-    </div>
+    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Initialisation...</div>
 </div>
 
 <div class="footer-alert">
-    <div class="alert-logo-a">A</div>
-    <div style="font-size: 30px;">⚠️</div>
-    <div class="alert-text" id="status-bar">
-        Tentative de connexion aux serveurs SIRI-Lite...
-    </div>
-    <div id="live-indicator" class="status-dot"></div>
+    <div style="background:var(--ratp-line-a-red); color:white; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-weight:bold;">A</div>
+    <div style="font-size: 25px;">⚠️</div>
+    <div class="alert-text" id="status-bar">Connexion aux serveurs IDFM...</div>
+    <div id="status-light" class="status-light"></div>
 </div>
 
 <script>
-    // --- CONFIGURATION ---
+    // Configuration selon le contrat swagger.json
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const STOP_ID = 'STIF:StopPoint:Q:22105'; // Suppression du ":" final pour plus de stabilité
+    const MONITORING_REF = 'STIF:StopPoint:Q:22105:'; // Joinville-le-Pont
+    const LINE_REF = 'STIF:Line::C01742:'; // RER A
+    
+    // Construction de l'URL basée sur swagger.json : host + basePath + path
+    const API_ENDPOINT = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&LineRef=${LINE_REF}`;
+    const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(API_ENDPOINT);
 
-    // --- CORRECTION URL (Ajout de /siri-lite/ dans le chemin) ---
-    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/v1/siri-lite/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
-    const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
-
-    // --- HORLOGE ---
     function updateClock() {
-        const now = new Date();
-        document.getElementById('clock').innerText = now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
-    // --- RÉCUPÉRATION DES DONNÉES ---
     async function fetchSchedules() {
         try {
-            const response = await fetch(PROXY_URL);
-            
-            if (!response.ok) {
-                // Affiche le code d'erreur réel (404, 401, etc.)
-                document.getElementById('status-bar').innerText = `⚠️ Liaison interrompue (Code ${response.status}). Vérifiez l'URL ou la Clé.`;
-                document.getElementById('live-indicator').classList.remove('status-live');
-                showDemo();
-                return;
-            }
+            const response = await fetch(PROXY_URL, {
+                method: 'GET',
+                headers: {
+                    'apikey': API_KEY, // Défini dans securityDefinitions de swagger.json
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) throw new Error(`Erreur ${response.status}`);
             
             const data = await response.json();
             
-            if (data.Siri && 
-                data.Siri.ServiceDelivery && 
-                data.Siri.ServiceDelivery.StopMonitoringDelivery[0] && 
-                data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
-                
+            // Format SIRI Lite
+            if (data.Siri && data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit) {
                 const visits = data.Siri.ServiceDelivery.StopMonitoringDelivery[0].MonitoredStopVisit;
                 renderBoard(visits);
-                
-                document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A. Flux SIRI-Lite actif.";
-                document.getElementById('live-indicator').classList.add('status-live');
-            } else {
-                document.getElementById('status-bar').innerText = "⚠️ Serveur contacté mais aucun train n'est recensé.";
-                showDemo();
+                document.getElementById('status-bar').innerText = "Trafic normal sur l'ensemble de la ligne A.";
+                document.getElementById('status-light').classList.add('online');
             }
         } catch (error) {
-            console.error("Erreur réseau:", error);
-            document.getElementById('status-bar').innerText = "⚠️ Impossible de joindre le proxy. Mode local activé.";
-            document.getElementById('live-indicator').classList.remove('status-live');
+            console.error(error);
+            document.getElementById('status-bar').innerText = "⚠️ Liaison API interrompue. Affichage théorique.";
+            document.getElementById('status-light').classList.remove('online');
             showDemo();
         }
     }
@@ -195,17 +174,12 @@
         const board = document.getElementById('board');
         board.innerHTML = '';
 
-        // Filtrage direction Paris (A)
+        // On ne garde que la direction Ouest (notée "A" dans les flux RATP pour Paris/Province)
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
             .filter(j => j.DirectionName[0].value === "A")
             .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime))
             .slice(0, 5);
-
-        if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center; margin-top:50px; font-size:24px;">Aucun train vers Paris actuellement.</div>';
-            return;
-        }
 
         trains.forEach(j => {
             const mission = j.JourneyNote[0] ? j.JourneyNote[0].value : '----';
@@ -213,16 +187,8 @@
             const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime);
             const diffMin = Math.floor((depTime - new Date()) / 60000);
             
-            let timeVal = diffMin;
-            let timeUnit = "min";
-            
-            if (diffMin <= 0) {
-                timeVal = "À";
-                timeUnit = "l'approche";
-            } else if (diffMin > 60) {
-                timeVal = depTime.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
-                timeUnit = "";
-            }
+            let timeVal = diffMin <= 0 ? "À" : diffMin;
+            let timeUnit = diffMin <= 0 ? "l'approche" : "min";
 
             board.innerHTML += `
                 <div class="train-row">
@@ -243,21 +209,9 @@
     function showDemo() {
         const board = document.getElementById('board');
         if (board.querySelectorAll('.train-row').length > 0) return;
-
-        const faux = [
-            {m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:6},
-            {m:'NELY', d:'CERGY-LE-HAUT', t:14},
-            {m:'TERI', d:'POISSY', t:26}
-        ];
         board.innerHTML = '';
-        faux.forEach(f => {
-            board.innerHTML += `
-                <div class="train-row">
-                    <div class="mission-code">${f.m}</div>
-                    <div class="destination-name">${f.d}</div>
-                    <div class="time-box"><span class="val">${f.t}</span><span class="unit">min</span></div>
-                    <div class="quai-box"><span class="label">quai</span><span class="val">2</span></div>
-                </div>`;
+        [{m:'ZEUS', d:'ST-GERMAIN-EN-LAYE', t:8}, {m:'NELY', d:'CERGY-LE-HAUT', t:16}, {m:'TERI', d:'POISSY', t:24}].forEach(f => {
+            board.innerHTML += `<div class="train-row"><div class="mission-code">${f.m}</div><div class="destination-name">${f.d}</div><div class="time-box"><span class="val">${f.t}</span><span class="unit">min</span></div><div class="quai-box"><span class="label">quai</span><span class="val">2</span></div></div>`;
         });
     }
 
@@ -266,6 +220,5 @@
     fetchSchedules();
     setInterval(fetchSchedules, 30000);
 </script>
-
 </body>
 </html>
