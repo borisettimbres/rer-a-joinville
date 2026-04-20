@@ -1,7 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siel RER A - Joinville-le-Pont</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ratp-bg-main: #f5f5f5;
+            --ratp-text-black: #000000;
+            --ratp-bg-dark: #222222;
+            --ratp-text-yellow: #fbc02d;
+            --ratp-line-a-red: #c0333a;
+            --ratp-quai-gray: #b0bec5;
+            --ratp-border-gray: #e0e0e0;
+        }
+
+        body { 
+            background-color: var(--ratp-bg-main); 
+            color: var(--ratp-text-black); 
+            font-family: 'Cabin', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+
+        /* HEADER */
+        header { 
+            background-color: var(--ratp-bg-main); 
+            padding: 15px 25px; 
+            display: grid; 
+            grid-template-columns: auto 1fr auto; 
+            align-items: center; 
+            border-bottom: 8px solid var(--ratp-line-a-red); 
+        }
+        .header-logos { display: flex; align-items: center; gap: 12px; }
+        .logo-rer { border: 4px solid #1a1a1a; background: white; border-radius: 12px; width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; }
+        .logo-a { background-color: var(--ratp-line-a-red); border-radius: 12px; width: 65px; height: 65px; display: flex; align-items: center; justify-content: center; font-size: 45px; font-weight: 900; color: white; }
+        .header-destinations { margin-left: 20px; }
+        .dest-row { font-size: 24px; font-weight: 700; text-transform: uppercase; line-height: 1.1; }
+        .header-time { background-color: var(--ratp-bg-dark); color: white; padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700; }
+
+        /* LISTE DES TRAINS */
+        .train-list { flex-grow: 1; padding: 0 25px; }
+        .train-row { 
+            display: grid; 
+            grid-template-columns: 130px 1fr 140px 100px; 
+            align-items: center; 
+            padding: 18px 0; 
+            border-bottom: 2px solid var(--ratp-border-gray); 
+        }
+        .mission-code { background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 16px; font-weight: bold; font-family: monospace; text-align: center; color: #333; }
+        .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; padding-left: 15px; letter-spacing: -1px; }
+        
+        /* TEMPS D'ATTENTE */
+        .time-box { background-color: var(--ratp-bg-dark); color: var(--ratp-text-yellow); border-radius: 6px; text-align: center; padding: 6px; width: 110px; }
+        .time-box .val { font-size: 42px; font-weight: 700; display: block; line-height: 0.9; }
+        .time-box .unit { font-size: 13px; text-transform: lowercase; }
+        
+        /* QUAI */
+        .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 6px; text-align: center; width: 65px; margin-left: auto; }
+        .quai-box .label { font-size: 11px; display: block; }
+        .quai-box .val { font-size: 26px; font-weight: 700; }
+
+        footer { background: #eee; padding: 10px 20px; border-top: 2px solid #ccc; font-size: 11px; color: #666; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-logos">
+        <div class="logo-rer">RER</div>
+        <div class="logo-a">A</div>
+    </div>
+    <div class="header-destinations">
+        <div class="dest-row">Joinville-le-Pont</div>
+        <div class="dest-row" style="font-size: 16px; color: var(--ratp-line-a-red);">Direction Paris / Ouest</div>
+    </div>
+    <div class="header-time" id="clock">--:--</div>
+</header>
+
+<div class="train-list" id="board">
+    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Connexion aux serveurs IDFM...</div>
+</div>
+
+<footer id="debug-log">Prêt au déploiement</footer>
+
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    
-    // Changement ici : On utilise ArretPoint qui est le plus fiable pour le RER
+    // ID technique spécifique au point d'arrêt (Quai)
     const STOP_ID = 'STIF:ArretPoint:Q:22105'; 
 
     function log(msg) { document.getElementById('debug-log').innerText = msg; }
@@ -12,91 +102,3 @@
     }
 
     async function fetchSchedules() {
-        // Ajout d'un timestamp pour éviter la mise en cache du proxy
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
-        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(target);
-
-        try {
-            const response = await fetch(proxy);
-            
-            if (!response.ok) {
-                // Si ça échoue encore, on affiche l'ID testé pour débugger
-                log(`Erreur ${response.status} sur ${STOP_ID}`);
-                return;
-            }
-
-            const data = await response.json();
-            
-            // Structure Siri Lite
-            const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
-            
-            if (delivery && delivery.MonitoredStopVisit && delivery.MonitoredStopVisit.length > 0) {
-                renderBoard(delivery.MonitoredStopVisit);
-                log("Connexion établie - Mise à jour : " + new Date().toLocaleTimeString());
-            } else {
-                log("Aucun train détecté pour cet arrêt.");
-                document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Pas de trains prévus.</div>';
-            }
-        } catch (e) {
-            log("Erreur réseau ou Proxy indisponible.");
-        }
-    }
-
-    function renderBoard(visits) {
-        const board = document.getElementById('board');
-        board.innerHTML = '';
-
-        const now = new Date();
-
-        const trains = visits
-            .map(v => v.MonitoredVehicleJourney)
-            // Filtre : Uniquement vers l'Ouest (Paris/St-Germain/Poissy/Cergy)
-            .filter(j => {
-                const dest = j.DestinationName[0].value.toLowerCase();
-                // On exclut Boissy et La Varenne qui sont à l'Est
-                return !dest.includes('boissy') && !dest.includes('varenne');
-            })
-            .sort((a, b) => {
-                const timeA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
-                const timeB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
-                return timeA - timeB;
-            })
-            .slice(0, 6);
-
-        if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train vers Paris trouvé.</div>';
-            return;
-        }
-
-        trains.forEach(j => {
-            // Extraction du code mission (ex: NELY, WYDE)
-            const mission = j.JourneyNote && j.JourneyNote[0] ? j.JourneyNote[0].value : "RER A";
-            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '');
-            
-            const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
-            const diffMin = Math.round((depTime - now) / 60000);
-            
-            let timeVal = diffMin <= 0 ? "À" : diffMin;
-            let timeUnit = diffMin <= 0 ? "l'approche" : "min";
-
-            board.innerHTML += `
-                <div class="train-row">
-                    <div class="mission-code">${mission}</div>
-                    <div class="destination-name">${dest}</div>
-                    <div class="time-box">
-                        <span class="val">${timeVal}</span>
-                        <span class="unit">${timeUnit}</span>
-                    </div>
-                    <div class="quai-box">
-                        <span class="label">quai</span>
-                        <span class="val">2</span>
-                    </div>
-                </div>`;
-        });
-    }
-
-    setInterval(updateClock, 1000);
-    updateClock();
-    fetchSchedules();
-    setInterval(fetchSchedules, 20000);
-</script>
