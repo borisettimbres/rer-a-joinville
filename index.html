@@ -1,61 +1,3 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siel RER A - Joinville</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --ratp-bg-main: #f5f5f5;
-            --ratp-text-black: #000000;
-            --ratp-bg-dark: #222222;
-            --ratp-text-yellow: #fbc02d;
-            --ratp-line-a-red: #c0333a;
-            --ratp-quai-gray: #b0bec5;
-            --ratp-border-gray: #e0e0e0;
-        }
-        body { background-color: var(--ratp-bg-main); color: var(--ratp-text-black); font-family: 'Cabin', sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        header { background-color: var(--ratp-bg-main); padding: 15px 25px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 8px solid var(--ratp-line-a-red); }
-        .header-logos { display: flex; align-items: center; gap: 12px; }
-        .logo-rer { border: 4px solid #1a1a1a; background: white; border-radius: 12px; width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; }
-        .logo-a { background-color: var(--ratp-line-a-red); border-radius: 12px; width: 65px; height: 65px; display: flex; align-items: center; justify-content: center; font-size: 45px; font-weight: 900; color: white; }
-        .header-destinations { margin-left: 20px; }
-        .dest-row { font-size: 24px; font-weight: 700; text-transform: uppercase; line-height: 1.1; }
-        .header-time { background-color: var(--ratp-bg-dark); color: white; padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700; }
-        .train-list { flex-grow: 1; padding: 0 25px; }
-        .train-row { display: grid; grid-template-columns: 130px 1fr 140px 100px; align-items: center; padding: 18px 0; border-bottom: 2px solid var(--ratp-border-gray); }
-        .mission-code { background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 16px; font-weight: bold; font-family: monospace; text-align: center; }
-        .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
-        .time-box { background-color: var(--ratp-bg-dark); color: var(--ratp-text-yellow); border-radius: 6px; text-align: center; padding: 6px; width: 110px; }
-        .time-box .val { font-size: 42px; font-weight: 700; display: block; line-height: 0.9; }
-        .time-box .unit { font-size: 13px; text-transform: lowercase; }
-        .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 6px; text-align: center; width: 65px; margin-left: auto; }
-        .quai-box .label { font-size: 11px; display: block; }
-        .quai-box .val { font-size: 26px; font-weight: 700; }
-        footer { background: #333; padding: 8px 20px; color: #00ff00; font-size: 11px; font-family: monospace; border-top: 1px solid #000; }
-    </style>
-</head>
-<body>
-
-<header>
-    <div class="header-logos">
-        <div class="logo-rer">RER</div>
-        <div class="logo-a">A</div>
-    </div>
-    <div class="header-destinations">
-        <div class="dest-row">Joinville-le-Pont</div>
-        <div class="dest-row" style="font-size: 16px; color: var(--ratp-line-a-red);">DIRECTION PARIS / OUEST</div>
-    </div>
-    <div class="header-time" id="clock">--:--</div>
-</header>
-
-<div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Initialisation du flux...</div>
-</div>
-
-<footer id="debug-log">Démarrage...</footer>
-
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     const STOP_ID = 'STIF:ArretPoint:Q:22105'; 
@@ -70,35 +12,48 @@
     }
 
     async function fetchSchedules() {
-        log("Tentative de connexion à PRIM...");
+        log("Appel API (Format SIRI Lite)...");
         
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/v1/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
-        // Changement de proxy vers AllOrigins (plus robuste pour le JSON)
-        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`;
+        // URL construite selon le Swagger : host + basePath + path
+        // On utilise l'URL sans "/v1/" comme indiqué dans ton document
+        const url = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}`;
 
         try {
-            const response = await fetch(proxy);
-            if (!response.ok) throw new Error("Erreur HTTP " + response.status);
-            
-            const rawData = await response.json();
-            // AllOrigins encapsule la réponse dans .contents
-            const data = JSON.parse(rawData.contents);
-            
-            log("Données reçues, analyse en cours...");
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'apikey': API_KEY, // Défini dans securityDefinitions
+                    'Accept': 'application/json' // Défini dans "produces"
+                }
+            });
 
+            // Si la réponse n'est pas 200 OK
+            if (!response.ok) {
+                const text = await response.text();
+                // Si le serveur renvoie du HTML, c'est souvent une erreur de route (404) ou de quota
+                throw new Error(`Erreur ${response.status}: ${text.substring(0, 50)}...`);
+            }
+
+            const data = await response.json();
+            
+            // Structure de réponse SIRI Lite (StopMonitoringResponseDelivery)
             const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
             const visits = delivery?.MonitoredStopVisit;
 
             if (visits && visits.length > 0) {
                 renderBoard(visits);
-                log("Flux OK - Mise à jour à " + new Date().toLocaleTimeString());
+                log("Mise à jour effectuée à " + new Date().toLocaleTimeString());
             } else {
-                log("Aucun train trouvé dans le flux.");
+                log("Aucun passage trouvé pour cet arrêt.");
                 document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train en approche.</div>';
             }
+
         } catch (e) {
             log("ERREUR : " + e.message);
-            document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:red;">Erreur de liaison API.</div>';
+            // On affiche l'erreur visuellement pour debug
+            if (e.message.includes("token '<'")) {
+                log("ERREUR : Le serveur a renvoyé du HTML au lieu du JSON (Vérifiez l'URL ou la clé).");
+            }
         }
     }
 
@@ -107,23 +62,22 @@
         board.innerHTML = '';
         const now = new Date();
 
+        // Filtrage pour la direction Paris / Ouest
         const trains = visits
             .map(v => v.MonitoredVehicleJourney)
             .filter(j => {
-                const dest = j.DestinationName[0].value.toLowerCase();
-                // Filtre Ouest : on ignore Boissy et La Varenne
+                const dest = j.DestinationName[0]?.value.toLowerCase() || "";
                 return !dest.includes('boissy') && !dest.includes('varenne');
             })
-            .sort((a, b) => new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime) - new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime))
+            .sort((a, b) => {
+                const timeA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
+                const timeB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
+                return timeA - timeB;
+            })
             .slice(0, 6);
 
-        if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Pas de trains vers Paris trouvés.</div>';
-            return;
-        }
-
         trains.forEach(j => {
-            const mission = j.JourneyNote && j.JourneyNote[0] ? j.JourneyNote[0].value : "----";
+            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
             const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
             const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
             const diffMin = Math.round((depTime - now) / 60000);
@@ -147,13 +101,8 @@
         });
     }
 
-    // Démarrage
     setInterval(updateClock, 1000);
     updateClock();
-    
-    // Petit délai pour laisser le navigateur respirer au chargement
-    setTimeout(fetchSchedules, 1000);
+    fetchSchedules();
     setInterval(fetchSchedules, 30000);
 </script>
-</body>
-</html>
