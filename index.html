@@ -1,34 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RER A - Joinville (Siel Lite)</title>
+    <style>
+        :root {
+            --ratp-blue: #0055c8;
+            --rer-a-red: #e3051c;
+            --bg-black: #000000;
+            --text-yellow: #ffcc00;
+            --text-white: #ffffff;
+        }
+
+        body {
+            background-color: var(--bg-black);
+            color: var(--text-white);
+            font-family: 'Arial Narrow', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: #1a1a1a;
+            padding: 20px 30px;
+            display: flex;
+            align-items: center;
+            border-bottom: 6px solid var(--rer-a-red);
+        }
+
+        .logo-rer {
+            background-color: var(--rer-a-red);
+            color: white;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 40px;
+            margin-right: 25px;
+        }
+
+        .station-name {
+            font-size: 32px;
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+
+        .train-list {
+            flex-grow: 1;
+            padding: 10px 40px;
+        }
+
+        .train-row {
+            display: grid;
+            grid-template-columns: 140px 1fr 220px;
+            align-items: center;
+            padding: 25px 0;
+            border-bottom: 2px solid #333;
+        }
+
+        .mission {
+            color: var(--text-yellow);
+            font-size: 38px;
+            font-weight: bold;
+            font-family: monospace;
+        }
+
+        .destination {
+            font-size: 42px;
+            font-weight: bold;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .time {
+            font-size: 42px;
+            color: var(--text-yellow);
+            text-align: right;
+            font-weight: bold;
+        }
+
+        .status-msg {
+            text-align: center;
+            padding-top: 100px;
+            font-size: 24px;
+            color: #666;
+        }
+
+        footer {
+            background-color: var(--ratp-blue);
+            height: 60px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .marquee {
+            white-space: nowrap;
+            font-size: 24px;
+            font-weight: bold;
+            animation: scroll 30s linear infinite;
+        }
+
+        @keyframes scroll {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-100%); }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo-rer">A</div>
+    <div class="station-name">Joinville-le-Pont <br><span style="color:var(--text-yellow); font-size:18px;">Direction PARIS / OUEST</span></div>
+</header>
+
+<div class="train-list" id="board">
+    <div class="status-msg">Chargement des horaires...</div>
+</div>
+
+<footer>
+    <div class="marquee">⚠️ Trafic normal sur l'ensemble de la ligne A. Bienvenue sur votre panneau SIEL personnel.</div>
+</footer>
+
 <script>
-    // Source alternative sans clé complexe
+    // Utilisation de l'API alternative + Proxy pour éviter les erreurs de sécurité
     const API_URL = 'https://api-ratp.pierre-grimaud.fr/v4/schedules/rers/a/joinville+le+pont/A';
     const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(API_URL);
 
     async function fetchSchedules() {
         try {
             const response = await fetch(PROXY_URL);
+            if (!response.ok) throw new Error('Erreur réseau');
+            
             const data = await response.json();
             
             if (data.result && data.result.schedules) {
                 renderBoard(data.result.schedules);
+            } else {
+                throw new Error('Données invalides');
             }
         } catch (error) {
-            document.getElementById('board').innerHTML = '<div class="status-msg">Erreur de liaison API</div>';
+            console.error(error);
+            document.getElementById('board').innerHTML = 
+                '<div class="status-msg" style="color:#e3051c">Erreur de liaison API</div>';
         }
     }
 
     function renderBoard(trains) {
         const board = document.getElementById('board');
         board.innerHTML = '';
+
+        if (trains.length === 0) {
+            board.innerHTML = '<div class="status-msg">Aucun train prévu</div>';
+            return;
+        }
+
         trains.forEach(t => {
-            board.innerHTML += `
-                <div class="train-row">
-                    <div class="mission">${t.code}</div>
-                    <div class="destination">${t.destination}</div>
-                    <div class="time">${t.message.replace('mn', 'min')}</div>
-                </div>`;
+            const row = document.createElement('div');
+            row.className = 'train-row';
+            
+            // On nettoie le texte du temps (ex: "4 mn" devient "4 min")
+            let timeText = t.message.toLowerCase().replace('mn', ' min');
+            
+            row.innerHTML = `
+                <div class="mission">${t.code}</div>
+                <div class="destination">${t.destination}</div>
+                <div class="time">${timeText}</div>
+            `;
+            board.appendChild(row);
         });
     }
 
+    // Lancement immédiat
     fetchSchedules();
+
+    // Mise à jour toutes les 30 secondes
     setInterval(fetchSchedules, 30000);
 </script>
+
+</body>
+</html>
