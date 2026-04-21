@@ -54,12 +54,13 @@
     <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Initialisation du flux...</div>
 </div>
 
-<footer id="debug-log">Démarrage...</footer>
+<footer id="debug-log">Connexion...</footer>
 
 <script>
-    // Configuration basée sur le Swagger
+    // --- CONFIGURATION ---
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const STOP_ID = 'STIF:ArretPoint:Q:22105'; 
+    // Correction : Format SIRI Lite strict exigé par le Swagger
+    const STOP_ID = 'STIF:StopPoint:Q:22105:'; 
     const BASE_URL = 'https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring';
 
     function log(msg) { 
@@ -73,111 +74,29 @@
     }
 
     async function fetchSchedules() {
-        log("Appel API SIRI Lite...");
+        log("Mise à jour des horaires...");
         
-        // Construction de l'URL selon les paramètres requis du Swagger
         const url = `${BASE_URL}?MonitoringRef=${STOP_ID}`;
 
         try {
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
-                    'apikey': API_KEY, // Défini dans securityDefinitions
-                    'Accept': 'application/json' // Défini dans produces
+                    'apikey': API_KEY,
+                    'Accept': 'application/json'
                 }
             });
 
-            // Gestion de l'erreur "Token <" : si la réponse n'est pas OK, on ne tente pas de parser le JSON
             if (!response.ok) {
                 const errorText = await response.text();
-                // Si le texte commence par <, c'est du HTML (erreur serveur 404, 401 ou 429)
+                // Si le serveur répond en HTML (Erreur 404/500/etc.)
                 if (errorText.trim().startsWith('<')) {
-                    throw new Error(`Le serveur a renvoyé du HTML au lieu du JSON (Status ${response.status}).`);
+                    throw new Error(`Le serveur a renvoyé du HTML (Erreur ${response.status}). Vérifiez l'URL ou la clé.`);
                 }
                 throw new Error(`Erreur HTTP ${response.status}`);
             }
 
             const data = await response.json();
             
-            // Accès sécurisé aux données SIRI Lite
-            const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
-            const visits = delivery?.MonitoredStopVisit;
-
-            if (visits && Array.isArray(visits) && visits.length > 0) {
-                renderBoard(visits);
-                log("Flux OK - " + new Date().toLocaleTimeString());
-            } else {
-                log("Aucun train trouvé.");
-                document.getElementById('board').innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Aucun train en approche.</div>';
-            }
-
-        } catch (e) {
-            log("ERREUR : " + e.message);
-            // On affiche l'erreur si c'est le premier chargement
-            if (document.getElementById('board').innerText.includes('Initialisation')) {
-                document.getElementById('board').innerHTML = `<div style="text-align:center; margin-top:100px; font-size:18px; color:red;">Erreur de liaison API.<br><small>${e.message}</small></div>`;
-            }
-        }
-    }
-
-    function renderBoard(visits) {
-        const board = document.getElementById('board');
-        const now = new Date();
-
-        const trains = visits
-            .map(v => v.MonitoredVehicleJourney)
-            .filter(j => {
-                if (!j.DestinationName || !j.DestinationName[0]) return false;
-                const dest = j.DestinationName[0].value.toLowerCase();
-                // On garde uniquement la direction Ouest (Paris/La Défense/St-Germain)
-                return !dest.includes('boissy') && !dest.includes('varenne');
-            })
-            .sort((a, b) => {
-                const timeA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
-                const timeB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
-                return timeA - timeB;
-            })
-            .slice(0, 6);
-
-        if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center; margin-top:100px; font-size:18px; color:#999;">Pas de trains vers Paris trouvés.</div>';
-            return;
-        }
-
-        let html = '';
-        trains.forEach(j => {
-            const mission = (j.JourneyNote && j.JourneyNote[0]) ? j.JourneyNote[0].value : (j.PublishedLineName?.[0]?.value || "----");
-            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
-            const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
-            const diffMin = Math.round((depTime - now) / 60000);
-            
-            let timeVal = diffMin <= 0 ? "À" : diffMin;
-            let timeUnit = diffMin <= 0 ? "l'approche" : "min";
-
-            html += `
-                <div class="train-row">
-                    <div class="mission-code">${mission}</div>
-                    <div class="destination-name">${dest}</div>
-                    <div class="time-box">
-                        <span class="val">${timeVal}</span>
-                        <span class="unit">${timeUnit}</span>
-                    </div>
-                    <div class="quai-box">
-                        <span class="label">quai</span>
-                        <span class="val">2</span>
-                    </div>
-                </div>`;
-        });
-        board.innerHTML = html;
-    }
-
-    // Démarrage automatique
-    setInterval(updateClock, 1000);
-    updateClock();
-    
-    // Premier appel puis rafraîchissement toutes les 30s
-    fetchSchedules();
-    setInterval(fetchSchedules, 30000);
-</script>
-</body>
-</html>
+            // Exploration de la structure SIRI Lite
+            const delivery = data.
