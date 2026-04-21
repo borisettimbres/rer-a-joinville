@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Siel RER A - Joinville (Version Stable)</title>
+    <title>Siel RER A - Joinville (V48 - Auth Slide 13)</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
         :root { --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
@@ -33,19 +33,17 @@
 </header>
 
 <div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Chargement des horaires...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Authentification via Header (Slide 13)...</div>
 </div>
 
-<footer id="debug">Prêt.</footer>
+<footer id="debug">Initialisation...</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     
-    /** * STRATÉGIE ISSUE DU PDF :
-     * On utilise l'ID de la Zone de Lieu (StopArea) car il est plus robuste.
-     * ID extrait de votre fichier gares : 41170
-     */
-    const MONITORING_REF = 'STIF:StopArea:SP:41170:'; 
+    // Identifiant SNCF certifié TR pour le quai RER A Joinville (Ligne 19841 du CSV)
+    const MONITORING_REF = 'STIF:StopPoint:Q:473943:'; 
+    const LINE_REF = 'STIF:Line::C01742:';
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
@@ -55,49 +53,48 @@
         const debug = document.getElementById('debug');
         const board = document.getElementById('board');
         
-        debug.innerText = "> Interrogation PRIM (StopArea 41170)...";
+        debug.innerText = "> Requête avec Header apiKey...";
 
-        // On retire LineRef pour éviter l'erreur 400
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
-        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
+        // L'URL ne contient plus la clé API (Slide 13)
+        const targetUrl = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&LineRef=${LINE_REF}`;
+        
+        // Proxy corsproxy.io qui transmet les Headers personnalisés
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
         try {
-            const response = await fetch(proxy);
-            
+            const response = await fetch(proxyUrl, {
+                method: 'GET',
+                headers: {
+                    'apiKey': API_KEY, // La clé est ici désormais !
+                    'Accept': 'application/json'
+                }
+            });
+
             if (!response.ok) {
-                // Si l'ID 41170 échoue, on essaie l'ID 473943 (SNCF) du fichier TR
-                debug.innerText = "> Erreur 400. Tentative ID de secours...";
-                return fetchBackup();
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || `Erreur HTTP ${response.status}`);
             }
 
             const data = await response.json();
-            const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit;
+            const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
+
+            if (delivery?.ErrorCondition) {
+                throw new Error("IDFM : " + delivery.ErrorCondition.ErrorInformation.ErrorText);
+            }
+
+            const visits = delivery?.MonitoredStopVisit;
 
             if (visits && visits.length > 0) {
-                debug.innerText = `> Flux OK (${visits.length} passages) - ${new Date().toLocaleTimeString()}`;
+                debug.innerText = `> Flux OK (${visits.length} trains) - ${new Date().toLocaleTimeString()}`;
                 render(visits);
             } else {
                 debug.innerText = "> Connecté, mais aucun train trouvé.";
-                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté en temps réel.</div>';
+                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté en temps réel vers Paris.</div>';
             }
 
         } catch (e) {
-            debug.innerText = "> ERREUR : " + e.message;
-        }
-    }
-
-    async function fetchBackup() {
-        const STOP_BACKUP = 'STIF:StopPoint:Q:473943:';
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_BACKUP}&apikey=${API_KEY}`;
-        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
-
-        try {
-            const response = await fetch(proxy);
-            const data = await response.json();
-            const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit;
-            if (visits) render(visits);
-        } catch (e) {
-            document.getElementById('debug').innerText = "> Échec total des identifiants.";
+            debug.innerText = "> ÉCHEC : " + e.message;
+            board.innerHTML = `<div style="text-align:center;margin-top:100px;color:red;"><b>Erreur d'authentification</b><br>${e.message}<br><br><small>Le serveur refuse le Header apiKey ou l'ID.</small></div>`;
         }
     }
 
@@ -105,14 +102,9 @@
         const board = document.getElementById('board');
         const now = new Date();
         
-        // On filtre : Ligne A + Direction Paris
+        // Filtrage direction Paris (On exclut Boissy et La Varenne)
         let trains = visits.map(v => v.MonitoredVehicleJourney)
             .filter(j => {
-                // On vérifie que c'est le RER A (C01742)
-                const line = j.LineRef?.value || "";
-                if (!line.includes('C01742')) return false;
-
-                // On exclut la province
                 const dest = j.DestinationName[0].value.toLowerCase();
                 return !dest.includes('boissy') && !dest.includes('varenne');
             })
@@ -121,11 +113,6 @@
                 const tB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
                 return tA - tB;
             });
-
-        if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Pas de RER A vers Paris trouvé.</div>';
-            return;
-        }
 
         let html = '';
         trains.slice(0, 6).forEach(j => {
@@ -144,7 +131,7 @@
                     </div>
                 </div>`;
         });
-        board.innerHTML = html;
+        board.innerHTML = html || '<div style="text-align:center;margin-top:100px;color:#999;">Pas de trains vers Paris trouvés.</div>';
     }
 
     setInterval(updateClock, 1000);
