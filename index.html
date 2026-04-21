@@ -16,6 +16,7 @@
             --ratp-border-gray: #e0e0e0;
         }
         body { background-color: var(--ratp-bg-main); color: var(--ratp-text-black); font-family: 'Cabin', sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
         header { background-color: var(--ratp-bg-main); padding: 15px 25px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 8px solid var(--ratp-line-a-red); }
         .header-logos { display: flex; align-items: center; gap: 12px; }
         .logo-rer { border: 4px solid #1a1a1a; background: white; border-radius: 12px; width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; }
@@ -23,6 +24,7 @@
         .header-destinations { margin-left: 20px; }
         .dest-row { font-size: 24px; font-weight: 700; text-transform: uppercase; line-height: 1.1; }
         .header-time { background-color: var(--ratp-bg-dark); color: white; padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700; }
+
         .train-list { flex-grow: 1; padding: 0 25px; overflow-y: auto; }
         .train-row { display: grid; grid-template-columns: 130px 1fr 140px 100px; align-items: center; padding: 18px 0; border-bottom: 2px solid var(--ratp-border-gray); }
         .mission-code { background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 16px; font-weight: bold; font-family: monospace; text-align: center; }
@@ -33,8 +35,9 @@
         .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 6px; text-align: center; width: 65px; margin-left: auto; }
         .quai-box .label { font-size: 11px; display: block; }
         .quai-box .val { font-size: 26px; font-weight: 700; }
+
+        .info-msg { text-align: center; margin-top: 100px; font-size: 20px; color: #666; padding: 20px; line-height: 1.5; }
         footer { background: #333; padding: 8px 20px; color: #00ff00; font-size: 11px; font-family: monospace; border-top: 1px solid #000; }
-        .error-msg { text-align:center; margin-top:100px; font-size:18px; color:#c0333a; padding: 20px; border: 2px dashed #c0333a; margin: 50px; }
     </style>
 </head>
 <body>
@@ -52,7 +55,7 @@
 </header>
 
 <div class="train-list" id="board">
-    <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Initialisation du flux...</div>
+    <div class="info-msg">Chargement du flux temps réel...</div>
 </div>
 
 <footer id="debug-log">Prêt.</footer>
@@ -60,18 +63,18 @@
 <script>
     // --- CONFIGURATION ---
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const STOP_ID = 'STIF:StopPoint:Q:22105:'; 
+    const STOP_ID = 'STIF:StopPoint:Q:22105:'; // ID exact Joinville-le-Pont
     
-    // URL Cible (Format SIRI Lite conforme Swagger)
+    // URL PRIM (IDFM)
     const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
     
-    // Proxy CORS pour autoriser l'appel depuis un navigateur
+    // Proxy AllOrigins pour contourner le blocage CORS du navigateur
     const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
 
-    function log(msg, color = "#00ff00") { 
-        const el = document.getElementById('debug-log');
-        el.innerText = "> " + msg;
-        el.style.color = color;
+    function log(msg, isError = false) { 
+        const footer = document.getElementById('debug-log');
+        footer.innerText = "> " + msg;
+        footer.style.color = isError ? "#ff4444" : "#00ff00";
         console.log(msg);
     }
 
@@ -80,40 +83,41 @@
     }
 
     async function fetchSchedules() {
-        log("Tentative de mise à jour...");
+        log("Actualisation des données...");
         
         try {
             const response = await fetch(PROXY_URL);
-            
             if (!response.ok) throw new Error(`Erreur Proxy (${response.status})`);
 
             const wrapper = await response.json();
-            
-            // Le contenu de l'API PRIM est encapsulé dans wrapper.contents
-            if (!wrapper.contents) throw new Error("Le serveur n'a renvoyé aucune donnée.");
+            if (!wrapper.contents) throw new Error("Réponse vide du serveur.");
 
             const data = JSON.parse(wrapper.contents);
             
-            // On descend dans la structure du Swagger
+            // Structure SIRI Lite : Siri -> ServiceDelivery -> StopMonitoringDelivery[0]
             const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
-            
-            if (data.ErrorMessage) {
-                throw new Error("IDFM : " + (data.ErrorMessage.ReplyCode || "Erreur Clé API"));
-            }
-
             const visits = delivery?.MonitoredStopVisit;
 
             if (visits && Array.isArray(visits) && visits.length > 0) {
                 renderBoard(visits);
-                log("Mise à jour réussie à " + new Date().toLocaleTimeString());
+                log("Flux mis à jour à " + new Date().toLocaleTimeString());
             } else {
-                log("Aucun train trouvé.", "yellow");
-                document.getElementById('board').innerHTML = '<div class="error-msg">Aucun train en approche (Vérifiez le trafic).</div>';
+                // Si l'API répond mais qu'il n'y a aucun train
+                log("L'API ne renvoie aucun train actuellement.", true);
+                document.getElementById('board').innerHTML = `
+                    <div class="info-msg">
+                        <b>Aucun train en approche.</b><br>
+                        <span style="font-size:14px;">Il n'y a aucun passage détecté par l'API pour cet arrêt à cet instant.</span>
+                    </div>`;
             }
 
         } catch (e) {
-            log("ERREUR : " + e.message, "red");
-            document.getElementById('board').innerHTML = `<div class="error-msg"><b>ERREUR :</b><br>${e.message}<br><br><small>Astuce : Vérifiez votre connexion internet et votre clé API PRIM.</small></div>`;
+            log("ERREUR : " + e.message, true);
+            document.getElementById('board').innerHTML = `
+                <div class="info-msg" style="color:#c0333a;">
+                    <b>Erreur de liaison API</b><br>
+                    <small>${e.message}</small>
+                </div>`;
         }
     }
 
@@ -121,27 +125,35 @@
         const board = document.getElementById('board');
         const now = new Date();
 
-        const trains = visits
-            .map(v => v.MonitoredVehicleJourney)
-            .filter(j => {
-                // Filtre Direction Paris / Ouest
-                const dest = j.DestinationName?.[0]?.value.toLowerCase() || "";
-                return !dest.includes('boissy') && !dest.includes('varenne');
-            })
-            .sort((a, b) => {
-                const timeA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
-                const timeB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
-                return timeA - timeB;
-            })
-            .slice(0, 7);
+        // 1. Transformer et Filtrer
+        const allTrains = visits.map(v => v.MonitoredVehicleJourney);
+        
+        // Filtrage : On garde uniquement les trains qui ne vont PAS vers Boissy ou La Varenne
+        const parisTrains = allTrains.filter(j => {
+            const dest = j.DestinationName?.[0]?.value.toLowerCase() || "";
+            return !dest.includes('boissy') && !dest.includes('varenne');
+        });
 
-        if (trains.length === 0) {
-            board.innerHTML = '<div class="error-msg">Pas de trains vers Paris trouvés.</div>';
+        // 2. Si on a des trains mais que le filtre Paris les a tous enlevés
+        if (allTrains.length > 0 && parisTrains.length === 0) {
+            board.innerHTML = `
+                <div class="info-msg">
+                    <b>Trafic uniquement vers la Province.</b><br>
+                    <span style="font-size:14px;">L'API détecte des trains vers Boissy/La Varenne, mais aucun vers Paris actuellement.</span>
+                </div>`;
             return;
         }
 
+        // 3. Trier par temps de passage
+        parisTrains.sort((a, b) => {
+            const timeA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
+            const timeB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
+            return timeA - timeB;
+        });
+
+        // 4. Affichage
         let html = '';
-        trains.forEach(j => {
+        parisTrains.slice(0, 6).forEach(j => {
             const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
             const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
             const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
@@ -167,13 +179,14 @@
         board.innerHTML = html;
     }
 
-    // --- LANCEMENT ---
+    // --- INITIALISATION ---
     setInterval(updateClock, 1000);
     updateClock();
     
-    // Appel immédiat
+    // Premier lancement
     fetchSchedules();
-    // Rafraîchissement automatique toutes les 30s
+    
+    // Rafraîchissement toutes les 30 secondes
     setInterval(fetchSchedules, 30000);
 </script>
 </body>
