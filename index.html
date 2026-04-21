@@ -2,54 +2,56 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Siel RER A - Joinville Final</title>
+    <title>Siel RER A - Joinville</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
-        :root { --ratp-bg: #f5f5f5; --ratp-red: #c0333a; --ratp-dark: #222; --ratp-yellow: #fbc02d; }
-        body { background: var(--ratp-bg); font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { padding: 15px 25px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 8px solid var(--ratp-red); }
-        .logo-a { background: var(--ratp-red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
-        .dest { margin-left: 20px; text-transform: uppercase; font-size: 24px; font-weight: 700; }
-        .clock { background: var(--ratp-dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
-        .list { flex-grow: 1; padding: 20px; }
-        .row { display: grid; grid-template-columns: 120px 1fr 140px 80px; align-items: center; padding: 15px 0; border-bottom: 2px solid #ddd; }
-        .mission { background: #ddd; padding: 5px; border-radius: 4px; text-align: center; font-weight: bold; }
-        .destination { font-size: 28px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
-        .time { background: var(--ratp-dark); color: var(--ratp-yellow); border-radius: 6px; text-align: center; padding: 8px; }
-        .time .val { font-size: 38px; font-weight: bold; display: block; line-height: 0.8; }
-        .quai { background: #b0bec5; border-radius: 6px; text-align: center; margin-left: 10px; padding: 5px; }
-        footer { background: #333; color: #0f0; padding: 5px 20px; font-family: monospace; font-size: 11px; }
+        :root { --bg: #f5f5f5; --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
+        body { background: var(--bg); font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--red); background: white; }
+        .logo-a { background: var(--red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
+        .clock { background: var(--dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
+        .list { flex-grow: 1; padding: 20px; overflow-y: auto; }
+        .row { display: grid; grid-template-columns: 100px 1fr 120px; align-items: center; padding: 15px 0; border-bottom: 2px solid #ddd; }
+        .mission { background: #ddd; padding: 5px; border-radius: 4px; text-align: center; font-weight: bold; font-family: monospace; }
+        .destination { font-size: 26px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
+        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 80px; }
+        .time .val { font-size: 32px; font-weight: bold; display: block; line-height: 0.8; }
+        footer { background: #333; color: #0f0; padding: 10px 20px; font-family: monospace; font-size: 12px; }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="logo-a">A</div>
-    <div class="dest">Joinville-le-Pont<br><span style="font-size:14px; color:var(--ratp-red)">Direction Paris / Ouest</span></div>
+    <div style="display:flex; align-items:center;">
+        <div class="logo-a">A</div>
+        <div style="margin-left:15px; font-size:22px; font-weight:bold;">JOINVILLE-LE-PONT</div>
+    </div>
     <div class="clock" id="clock">--:--</div>
 </header>
 
 <div class="list" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;">Recherche des prochains trains...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;">Chargement des données...</div>
 </div>
 
-<footer id="debug">Prêt.</footer>
+<footer id="debug-log">Prêt.</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const STOP_ID = 'STIF:StopPoint:Q:22105:'; // Joinville RER A
-    const LINE_ID = 'STIF:Line::C01742:';      // Identifiant RER A
+    
+    // On utilise l'ID de quai qui a fonctionné au début (sans erreur "inconnu")
+    const STOP_ID = 'STIF:StopPoint:Q:22105:'; 
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
-    async function fetchSchedules() {
-        const debug = document.getElementById('debug');
-        debug.innerText = "> Interrogation PRIM...";
+    async function fetchData() {
+        const debug = document.getElementById('debug-log');
+        const board = document.getElementById('board');
+        debug.innerText = "> Interrogation du serveur...";
 
-        // Construction de l'URL avec MonitoringRef ET LineRef pour éviter l'erreur "inconnu"
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&LineRef=${LINE_ID}&apikey=${API_KEY}`;
+        // URL ultra-simple : pas de LineRef pour éviter l'erreur 400
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
         const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`;
 
         try {
@@ -57,71 +59,54 @@
             const wrapper = await response.json();
             const data = JSON.parse(wrapper.contents);
 
-            // On vérifie si l'API a renvoyé une erreur dans le JSON
             const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
             
+            // Si le serveur renvoie une erreur interne
             if (delivery?.ErrorCondition) {
-                const txt = delivery.ErrorCondition.ErrorInformation.ErrorText;
-                debug.innerText = "> Erreur API : " + txt;
+                debug.innerText = "> Erreur API : " + delivery.ErrorCondition.ErrorInformation.ErrorText;
                 return;
             }
 
             const visits = delivery?.MonitoredStopVisit;
 
-            if (visits && visits.length > 0) {
-                render(visits);
-                debug.innerText = "> OK - " + new Date().toLocaleTimeString();
-            } else {
-                debug.innerText = "> Aucun train trouvé dans le flux.";
-                document.getElementById('board').innerHTML = '<div style="text-align:center;margin-top:50px;">Aucun passage prévu.</div>';
+            if (!visits || visits.length === 0) {
+                debug.innerText = "> Réponse vide (aucun train en approche).";
+                board.innerHTML = '<div style="text-align:center;margin-top:50px;">Aucun passage prévu actuellement.</div>';
+                return;
             }
 
-        } catch (e) {
-            debug.innerText = "> Erreur réseau ou JSON.";
-        }
-    }
+            debug.innerText = `> Succès : ${visits.length} trains trouvés à ${new Date().toLocaleTimeString()}`;
+            
+            // Affichage sans AUCUN filtre pour voir si des données arrivent
+            let html = '';
+            visits.forEach(v => {
+                const j = v.MonitoredVehicleJourney;
+                const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '');
+                const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "??";
+                const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
+                const diff = Math.round((time - new Date()) / 60000);
 
-    function render(visits) {
-        const board = document.getElementById('board');
-        const now = new Date();
-        
-        const trains = visits
-            .map(v => v.MonitoredVehicleJourney)
-            .filter(j => {
-                const d = j.DestinationName[0].value.toLowerCase();
-                return !d.includes('boissy') && !d.includes('varenne');
-            })
-            .sort((a, b) => {
-                const tA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
-                const tB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
-                return tA - tB;
+                html += `
+                    <div class="row">
+                        <div class="mission">${mission}</div>
+                        <div class="destination">${dest}</div>
+                        <div class="time">
+                            <span class="val">${diff <= 0 ? 'À' : diff}</span>
+                            <span style="font-size:10px">${diff <= 0 ? 'approche' : 'min'}</span>
+                        </div>
+                    </div>`;
             });
+            board.innerHTML = html;
 
-        let html = '';
-        trains.slice(0, 6).forEach(j => {
-            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
-            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
-            const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
-            const diff = Math.round((time - now) / 60000);
-
-            html += `
-                <div class="row">
-                    <div class="mission">${mission}</div>
-                    <div class="destination">${dest}</div>
-                    <div class="time">
-                        <span class="val">${diff <= 0 ? 'À' : diff}</span>
-                        <span style="font-size:12px">${diff <= 0 ? "l'approche" : 'min'}</span>
-                    </div>
-                    <div class="quai"><span style="font-size:10px">QUAI</span><br><b>2</b></div>
-                </div>`;
-        });
-        board.innerHTML = html || '<div style="text-align:center;margin-top:50px;">Aucun train vers Paris.</div>';
+        } catch (e) {
+            debug.innerText = "> Erreur de connexion ou de clé.";
+        }
     }
 
     setInterval(updateClock, 1000);
     updateClock();
-    fetchSchedules();
-    setInterval(fetchSchedules, 30000);
+    fetchData();
+    setInterval(fetchData, 30000);
 </script>
 </body>
 </html>
