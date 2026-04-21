@@ -34,6 +34,7 @@
         .quai-box .label { font-size: 11px; display: block; }
         .quai-box .val { font-size: 26px; font-weight: 700; }
         footer { background: #333; padding: 8px 20px; color: #00ff00; font-size: 11px; font-family: monospace; border-top: 1px solid #000; }
+        .error-msg { text-align:center; margin-top:100px; font-size:18px; color:#c0333a; padding: 20px; border: 2px dashed #c0333a; margin: 50px; }
     </style>
 </head>
 <body>
@@ -54,49 +55,126 @@
     <div style="text-align:center; margin-top:100px; font-size:22px; color:#999;">Initialisation du flux...</div>
 </div>
 
-<footer id="debug-log">Connexion...</footer>
+<footer id="debug-log">Prêt.</footer>
 
 <script>
     // --- CONFIGURATION ---
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    // Correction : Format SIRI Lite strict exigé par le Swagger
     const STOP_ID = 'STIF:StopPoint:Q:22105:'; 
-    const BASE_URL = 'https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring';
+    
+    // URL Cible (Format SIRI Lite conforme Swagger)
+    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
+    
+    // Proxy CORS pour autoriser l'appel depuis un navigateur
+    const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
 
-    function log(msg) { 
-        document.getElementById('debug-log').innerText = "> " + msg;
+    function log(msg, color = "#00ff00") { 
+        const el = document.getElementById('debug-log');
+        el.innerText = "> " + msg;
+        el.style.color = color;
         console.log(msg);
     }
 
     function updateClock() {
-        const now = new Date();
-        document.getElementById('clock').innerText = now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
     async function fetchSchedules() {
-        log("Mise à jour des horaires...");
+        log("Tentative de mise à jour...");
         
-        const url = `${BASE_URL}?MonitoringRef=${STOP_ID}`;
-
         try {
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'apikey': API_KEY,
-                    'Accept': 'application/json'
-                }
-            });
+            const response = await fetch(PROXY_URL);
+            
+            if (!response.ok) throw new Error(`Erreur Proxy (${response.status})`);
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                // Si le serveur répond en HTML (Erreur 404/500/etc.)
-                if (errorText.trim().startsWith('<')) {
-                    throw new Error(`Le serveur a renvoyé du HTML (Erreur ${response.status}). Vérifiez l'URL ou la clé.`);
-                }
-                throw new Error(`Erreur HTTP ${response.status}`);
+            const wrapper = await response.json();
+            
+            // Le contenu de l'API PRIM est encapsulé dans wrapper.contents
+            if (!wrapper.contents) throw new Error("Le serveur n'a renvoyé aucune donnée.");
+
+            const data = JSON.parse(wrapper.contents);
+            
+            // On descend dans la structure du Swagger
+            const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
+            
+            if (data.ErrorMessage) {
+                throw new Error("IDFM : " + (data.ErrorMessage.ReplyCode || "Erreur Clé API"));
             }
 
-            const data = await response.json();
+            const visits = delivery?.MonitoredStopVisit;
+
+            if (visits && Array.isArray(visits) && visits.length > 0) {
+                renderBoard(visits);
+                log("Mise à jour réussie à " + new Date().toLocaleTimeString());
+            } else {
+                log("Aucun train trouvé.", "yellow");
+                document.getElementById('board').innerHTML = '<div class="error-msg">Aucun train en approche (Vérifiez le trafic).</div>';
+            }
+
+        } catch (e) {
+            log("ERREUR : " + e.message, "red");
+            document.getElementById('board').innerHTML = `<div class="error-msg"><b>ERREUR :</b><br>${e.message}<br><br><small>Astuce : Vérifiez votre connexion internet et votre clé API PRIM.</small></div>`;
+        }
+    }
+
+    function renderBoard(visits) {
+        const board = document.getElementById('board');
+        const now = new Date();
+
+        const trains = visits
+            .map(v => v.MonitoredVehicleJourney)
+            .filter(j => {
+                // Filtre Direction Paris / Ouest
+                const dest = j.DestinationName?.[0]?.value.toLowerCase() || "";
+                return !dest.includes('boissy') && !dest.includes('varenne');
+            })
+            .sort((a, b) => {
+                const timeA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
+                const timeB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
+                return timeA - timeB;
+            })
+            .slice(0, 7);
+
+        if (trains.length === 0) {
+            board.innerHTML = '<div class="error-msg">Pas de trains vers Paris trouvés.</div>';
+            return;
+        }
+
+        let html = '';
+        trains.forEach(j => {
+            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
+            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
+            const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
+            const diffMin = Math.round((depTime - now) / 60000);
             
-            // Exploration de la structure SIRI Lite
-            const delivery = data.
+            let timeVal = diffMin <= 0 ? "À" : diffMin;
+            let timeUnit = diffMin <= 0 ? "l'approche" : "min";
+
+            html += `
+                <div class="train-row">
+                    <div class="mission-code">${mission}</div>
+                    <div class="destination-name">${dest}</div>
+                    <div class="time-box">
+                        <span class="val">${timeVal}</span>
+                        <span class="unit">${timeUnit}</span>
+                    </div>
+                    <div class="quai-box">
+                        <span class="label">quai</span>
+                        <span class="val">2</span>
+                    </div>
+                </div>`;
+        });
+        board.innerHTML = html;
+    }
+
+    // --- LANCEMENT ---
+    setInterval(updateClock, 1000);
+    updateClock();
+    
+    // Appel immédiat
+    fetchSchedules();
+    // Rafraîchissement automatique toutes les 30s
+    setInterval(fetchSchedules, 30000);
+</script>
+</body>
+</html>
