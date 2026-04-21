@@ -2,153 +2,85 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>SIEL RER A - Joinville (Version TR Certifiée)</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
+    <title>Scanner Diagnostic RER A - Joinville</title>
     <style>
-        :root { --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
-        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        header { background: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--red); }
-        .logo-a { background: var(--red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
-        .clock { background: var(--dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
-        .board { flex-grow: 1; padding: 20px; overflow-y: auto; }
-        .row { display: grid; grid-template-columns: 100px 1fr 130px; align-items: center; padding: 18px 0; border-bottom: 2px solid #ddd; }
-        .mission { background: #ddd; padding: 5px; border-radius: 4px; text-align: center; font-weight: bold; font-family: monospace; }
-        .dest { font-size: 26px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
-        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 90px; }
-        .time .val { font-size: 32px; font-weight: bold; display: block; line-height: 0.8; }
-        footer { background: #333; color: #0f0; padding: 10px 20px; font-family: monospace; font-size: 11px; }
+        body { font-family: sans-serif; background: #1a1a1a; color: #fff; padding: 20px; }
+        .test-box { border: 1px solid #444; padding: 15px; margin-bottom: 10px; border-radius: 5px; }
+        .testing { color: #aaa; }
+        .success { border-color: #4caf50; background: #1b301b; }
+        .empty { color: #ffa000; }
+        .error { color: #f44336; }
+        pre { font-size: 10px; background: #000; padding: 10px; overflow: auto; max-height: 150px; }
+        .badge { padding: 3px 8px; border-radius: 3px; font-weight: bold; font-size: 12px; }
+        .b-ok { background: #4caf50; color: #fff; }
+        .b-null { background: #555; color: #fff; }
     </style>
 </head>
 <body>
 
-<header>
-    <div style="display:flex; align-items:center;">
-        <div class="logo-a">A</div>
-        <div style="margin-left:15px;">
-            <div style="font-size:24px; font-weight:bold;">JOINVILLE-LE-PONT</div>
-            <div style="font-size:14px; color:var(--red)">DIRECTION PARIS / OUEST</div>
-        </div>
-    </div>
-    <div class="clock" id="clock">--:--</div>
-</header>
-
-<div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Connexion au périmètre Temps Réel...</div>
-</div>
-
-<footer id="debug">Initialisation...</footer>
+    <h2>Diagnostic Joinville-le-Pont (RER A)</h2>
+    <p>Ce script teste les IDs issus de vos fichiers CSV avec l'auth "Slide 13".</p>
+    
+    <div id="results"></div>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     
-    // IDs extraits de ton fichier "perimetre-des-donnees-tr-disponibles-plateforme-idfm.csv"
-    // Ces codes 473... sont les identifiants techniques "TR" pour le RER A
-    const STOP_IDS = [
-        'STIF:StopPoint:Q:473943:', 
-        'STIF:StopPoint:Q:473950:',
-        'STIF:StopPoint:Q:473951:',
-        'STIF:StopPoint:Q:473944:'
+    // Les 4 familles d'IDs identifiées dans vos documents
+    const TARGETS = [
+        { id: 'STIF:StopPoint:Q:473943:', desc: 'ID technique SNCF (Périmètre TR)' },
+        { id: 'STIF:StopPoint:Q:43135:',  desc: 'ID physique (Fichier Gares)' },
+        { id: 'STIF:StopArea:SP:70640:',  desc: 'Zone Correspondance (ZDC)' },
+        { id: 'STIF:StopPoint:Q:41171:',  desc: 'Identifiant Standard RATP' }
     ];
-    const LINE_ID = 'STIF:Line::C01742:';
 
-    function updateClock() {
-        document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
-    }
-
-    async function fetchOneStop(id) {
-        const targetUrl = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${id}&LineRef=${LINE_ID}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+    async function runDiagnostic() {
+        const container = document.getElementById('results');
         
-        try {
-            const response = await fetch(proxyUrl, {
-                method: 'GET',
-                headers: { 
-                    'apiKey': API_KEY,
-                    'Accept': 'application/json' 
+        for (let target of TARGETS) {
+            const div = document.createElement('div');
+            div.className = 'test-box testing';
+            div.innerHTML = `<strong>Test : ${target.id}</strong><br><small>${target.desc}</small><br>Connexion...`;
+            container.appendChild(div);
+
+            const url = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${target.id}`;
+            const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+
+            try {
+                const response = await fetch(proxy, {
+                    method: 'GET',
+                    headers: { 'apiKey': API_KEY, 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+                const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit || [];
+
+                if (visits.length > 0) {
+                    div.className = 'test-box success';
+                    div.innerHTML = `
+                        <span class="badge b-ok">FLUX TROUVÉ</span> 
+                        <strong>${target.id}</strong> (${visits.length} trains)<br>
+                        <small>${target.desc}</small>
+                        <pre>${JSON.stringify(visits[0].MonitoredVehicleJourney.DestinationName, null, 2)}</pre>
+                    `;
+                } else {
+                    div.className = 'test-box';
+                    div.innerHTML = `
+                        <span class="badge b-null">VIDE</span> 
+                        <strong>${target.id}</strong><br>
+                        <small>Connecté, mais le flux ne contient aucun passage.</small>
+                    `;
                 }
-            });
-            
-            if (!response.ok) return [];
-            const data = await response.json();
-            return data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit || [];
-        } catch (e) {
-            return [];
-        }
-    }
-
-    async function fetchAllSchedules() {
-        const debug = document.getElementById('debug');
-        debug.innerText = "> Scan du périmètre TR (4 IDs)...";
-
-        try {
-            // Interrogation simultanée des 4 identifiants TR potentiels
-            const results = await Promise.all(STOP_IDS.map(id => fetchOneStop(id)));
-            let allVisits = [].concat(...results);
-
-            if (allVisits.length > 0) {
-                debug.innerText = `> Flux TR reçu (${allVisits.length} trains) - ${new Date().toLocaleTimeString()}`;
-                render(allVisits);
-            } else {
-                debug.innerText = "> Connecté, mais périmètre TR vide actuellement.";
-                document.getElementById('board').innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train en approche détecté sur le périmètre TR.</div>';
+            } catch (e) {
+                div.className = 'test-box error';
+                div.innerHTML = `<strong>${target.id}</strong><br>Erreur : ${e.message}`;
             }
-        } catch (e) {
-            debug.innerText = "> Erreur : " + e.message;
         }
     }
 
-    function render(visits) {
-        const board = document.getElementById('board');
-        const now = new Date();
-        const seen = new Set();
-        
-        let trains = visits
-            .map(v => v.MonitoredVehicleJourney)
-            .filter(j => {
-                // Dé-doublonnage par numéro de train ou DatedVehicleJourneyRef
-                const ref = j.FramedVehicleJourneyRef?.DatedVehicleJourneyRef || j.TrainNumber?.value;
-                if (seen.has(ref)) return false;
-                seen.add(ref);
-
-                // Filtrage Direction Paris (Ouest)
-                const dest = j.DestinationName[0].value.toLowerCase();
-                return !dest.includes('boissy') && !dest.includes('varenne');
-            })
-            .sort((a, b) => {
-                const tA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
-                const tB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
-                return tA - tB;
-            });
-
-        if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Trafic Province uniquement.</div>';
-            return;
-        }
-
-        let html = '';
-        trains.slice(0, 7).forEach(j => {
-            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
-            const mission = j.JourneyNote?.[0]?.value || "----";
-            const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
-            const diff = Math.round((time - now) / 60000);
-
-            html += `
-                <div class="row">
-                    <div class="mission">${mission}</div>
-                    <div class="dest">${dest}</div>
-                    <div class="time">
-                        <span class="val">${diff <= 0 ? 'À' : diff}</span>
-                        <span style="font-size:12px">${diff <= 0 ? 'approche' : 'min'}</span>
-                    </div>
-                </div>`;
-        });
-        board.innerHTML = html;
-    }
-
-    setInterval(updateClock, 1000);
-    updateClock();
-    fetchAllSchedules();
-    setInterval(fetchAllSchedules, 30000);
+    runDiagnostic();
 </script>
 </body>
 </html>
