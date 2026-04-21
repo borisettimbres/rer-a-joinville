@@ -2,11 +2,11 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Siel RER A - Joinville (Certifié TR)</title>
+    <title>Siel RER A - Joinville (Version Stable)</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
         :root { --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
-        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
         header { background: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--red); }
         .logo-a { background: var(--red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
         .clock { background: var(--dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
@@ -14,8 +14,8 @@
         .row { display: grid; grid-template-columns: 100px 1fr 130px; align-items: center; padding: 18px 0; border-bottom: 2px solid #ddd; }
         .mission { background: #ddd; padding: 5px; border-radius: 4px; text-align: center; font-weight: bold; font-family: monospace; }
         .dest { font-size: 28px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
-        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 90px; }
-        .time .val { font-size: 36px; font-weight: bold; display: block; line-height: 0.8; }
+        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 100px; }
+        .time .val { font-size: 38px; font-weight: bold; display: block; line-height: 0.8; }
         footer { background: #333; color: #0f0; padding: 10px 20px; font-family: monospace; font-size: 11px; }
     </style>
 </head>
@@ -26,33 +26,26 @@
         <div class="logo-a">A</div>
         <div style="margin-left:15px;">
             <div style="font-size:24px; font-weight:bold;">JOINVILLE-LE-PONT</div>
-            <div id="status-label" style="font-size:14px; color:var(--red)">FLUX TEMPS RÉEL CERTIFIÉ</div>
+            <div style="font-size:14px; color:var(--red)">DIRECTION PARIS / OUEST</div>
         </div>
     </div>
     <div class="clock" id="clock">--:--</div>
 </header>
 
 <div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;" id="main-msg">Connexion aux serveurs IDFM...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Chargement des horaires...</div>
 </div>
 
-<footer id="debug">Initialisation...</footer>
+<footer id="debug">Prêt.</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     
-    // IDs certifiés extraits de votre fichier "Perimètre TR"
-    // On cible le Quai Paris (473943 ou 473951)
-    const MONITORING_REF = 'STIF:StopPoint:Q:473943:'; 
-    const LINE_REF = 'STIF:Line::C01742:';
-
-    // Systèmes de secours pour éviter le "Load failed"
-    const PROXIES = [
-        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
-    ];
-    let proxyIdx = 0;
+    /** * STRATÉGIE ISSUE DU PDF :
+     * On utilise l'ID de la Zone de Lieu (StopArea) car il est plus robuste.
+     * ID extrait de votre fichier gares : 41170
+     */
+    const MONITORING_REF = 'STIF:StopArea:SP:41170:'; 
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
@@ -62,46 +55,49 @@
         const debug = document.getElementById('debug');
         const board = document.getElementById('board');
         
-        // URL conforme au guide PDF : apikey dans l'URL et couplage Monitoring/Line
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&LineRef=${LINE_REF}&apikey=${API_KEY}`;
-        const finalUrl = PROXIES[proxyIdx](target);
+        debug.innerText = "> Interrogation PRIM (StopArea 41170)...";
 
-        debug.innerText = `> Tentative (Proxy ${proxyIdx + 1})...`;
+        // On retire LineRef pour éviter l'erreur 400
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
+        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
 
         try {
-            const response = await fetch(finalUrl);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            const data = await response.json();
-            const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
-
-            if (delivery?.ErrorCondition) {
-                // Si l'ID est refusé, on essaie l'ID alternatif du fichier TR (473951)
-                throw new Error("IDFM : " + delivery.ErrorCondition.ErrorInformation.ErrorText);
+            const response = await fetch(proxy);
+            
+            if (!response.ok) {
+                // Si l'ID 41170 échoue, on essaie l'ID 473943 (SNCF) du fichier TR
+                debug.innerText = "> Erreur 400. Tentative ID de secours...";
+                return fetchBackup();
             }
 
-            const visits = delivery?.MonitoredStopVisit;
+            const data = await response.json();
+            const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit;
 
             if (visits && visits.length > 0) {
+                debug.innerText = `> Flux OK (${visits.length} passages) - ${new Date().toLocaleTimeString()}`;
                 render(visits);
-                debug.innerText = `> Flux OK - ID ${MONITORING_REF} - ${new Date().toLocaleTimeString()}`;
             } else {
                 debug.innerText = "> Connecté, mais aucun train trouvé.";
-                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train en approche vers Paris.</div>';
+                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté en temps réel.</div>';
             }
 
         } catch (e) {
-            console.error(e);
-            debug.innerText = `> Échec : ${e.message}`;
-            
-            // On bascule sur le proxy suivant en cas de "Load failed"
-            if (proxyIdx < PROXIES.length - 1) {
-                proxyIdx++;
-                setTimeout(fetchSchedules, 500);
-            } else {
-                proxyIdx = 0;
-                board.innerHTML = `<div style="text-align:center;margin-top:100px;color:red;"><b>Erreur Critique</b><br>${e.message}<br><br><small>Vérifiez votre clé API sur PRIM.</small></div>`;
-            }
+            debug.innerText = "> ERREUR : " + e.message;
+        }
+    }
+
+    async function fetchBackup() {
+        const STOP_BACKUP = 'STIF:StopPoint:Q:473943:';
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_BACKUP}&apikey=${API_KEY}`;
+        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
+
+        try {
+            const response = await fetch(proxy);
+            const data = await response.json();
+            const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit;
+            if (visits) render(visits);
+        } catch (e) {
+            document.getElementById('debug').innerText = "> Échec total des identifiants.";
         }
     }
 
@@ -109,11 +105,16 @@
         const board = document.getElementById('board');
         const now = new Date();
         
-        // Filtrage Paris (On exclut Boissy et La Varenne)
+        // On filtre : Ligne A + Direction Paris
         let trains = visits.map(v => v.MonitoredVehicleJourney)
             .filter(j => {
-                const d = j.DestinationName[0].value.toLowerCase();
-                return !d.includes('boissy') && !d.includes('varenne');
+                // On vérifie que c'est le RER A (C01742)
+                const line = j.LineRef?.value || "";
+                if (!line.includes('C01742')) return false;
+
+                // On exclut la province
+                const dest = j.DestinationName[0].value.toLowerCase();
+                return !dest.includes('boissy') && !dest.includes('varenne');
             })
             .sort((a, b) => {
                 const tA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
@@ -121,10 +122,15 @@
                 return tA - tB;
             });
 
+        if (trains.length === 0) {
+            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Pas de RER A vers Paris trouvé.</div>';
+            return;
+        }
+
         let html = '';
         trains.slice(0, 6).forEach(j => {
             const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
-            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
+            const mission = j.JourneyNote?.[0]?.value || "----";
             const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
             const diff = Math.round((time - now) / 60000);
 
@@ -138,7 +144,7 @@
                     </div>
                 </div>`;
         });
-        board.innerHTML = html || '<div style="text-align:center;margin-top:100px;color:#999;">Pas de trains vers Paris trouvés.</div>';
+        board.innerHTML = html;
     }
 
     setInterval(updateClock, 1000);
