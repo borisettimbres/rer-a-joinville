@@ -2,20 +2,20 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Siel RER A - Joinville (V48 - Auth Slide 13)</title>
+    <title>SIEL RER A - Joinville (Multi-Quais TR)</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
         :root { --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
-        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--red); }
         .logo-a { background: var(--red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
         .clock { background: var(--dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
         .board { flex-grow: 1; padding: 20px; overflow-y: auto; }
         .row { display: grid; grid-template-columns: 100px 1fr 130px; align-items: center; padding: 18px 0; border-bottom: 2px solid #ddd; }
         .mission { background: #ddd; padding: 5px; border-radius: 4px; text-align: center; font-weight: bold; font-family: monospace; }
-        .dest { font-size: 28px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
-        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 100px; }
-        .time .val { font-size: 38px; font-weight: bold; display: block; line-height: 0.8; }
+        .dest { font-size: 26px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
+        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 90px; }
+        .time .val { font-size: 32px; font-weight: bold; display: block; line-height: 0.8; }
         footer { background: #333; color: #0f0; padding: 10px 20px; font-family: monospace; font-size: 11px; }
     </style>
 </head>
@@ -33,78 +33,78 @@
 </header>
 
 <div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Authentification via Header (Slide 13)...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Fusion des flux temps réel...</div>
 </div>
 
-<footer id="debug">Initialisation...</footer>
+<footer id="debug">Prêt.</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     
-    // Identifiant SNCF certifié TR pour le quai RER A Joinville (Ligne 19841 du CSV)
-    const MONITORING_REF = 'STIF:StopPoint:Q:473943:'; 
-    const LINE_REF = 'STIF:Line::C01742:';
+    // Les 4 IDs extraits de ton fichier "Périmètre TR" pour Joinville RER A
+    const STOP_IDS = [
+        'STIF:StopPoint:Q:473943:',
+        'STIF:StopPoint:Q:473944:',
+        'STIF:StopPoint:Q:473950:',
+        'STIF:StopPoint:Q:473951:'
+    ];
+    const LINE_ID = 'STIF:Line::C01742:';
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
-    async function fetchSchedules() {
-        const debug = document.getElementById('debug');
-        const board = document.getElementById('board');
-        
-        debug.innerText = "> Requête avec Header apiKey...";
-
-        // L'URL ne contient plus la clé API (Slide 13)
-        const targetUrl = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&LineRef=${LINE_REF}`;
-        
-        // Proxy corsproxy.io qui transmet les Headers personnalisés
+    async function fetchOneStop(id) {
+        const targetUrl = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${id}&LineRef=${LINE_ID}`;
         const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+        
+        const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: { 'apiKey': API_KEY, 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit || [];
+    }
+
+    async function fetchAllSchedules() {
+        const debug = document.getElementById('debug');
+        debug.innerText = "> Scan des 4 quais TR en cours...";
 
         try {
-            const response = await fetch(proxyUrl, {
-                method: 'GET',
-                headers: {
-                    'apiKey': API_KEY, // La clé est ici désormais !
-                    'Accept': 'application/json'
-                }
-            });
+            // On lance les 4 requêtes en parallèle
+            const results = await Promise.all(STOP_IDS.map(id => fetchOneStop(id)));
+            
+            // On fusionne tout dans un seul tableau
+            let allVisits = [].concat(...results);
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.message || `Erreur HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
-
-            if (delivery?.ErrorCondition) {
-                throw new Error("IDFM : " + delivery.ErrorCondition.ErrorInformation.ErrorText);
-            }
-
-            const visits = delivery?.MonitoredStopVisit;
-
-            if (visits && visits.length > 0) {
-                debug.innerText = `> Flux OK (${visits.length} trains) - ${new Date().toLocaleTimeString()}`;
-                render(visits);
+            if (allVisits.length > 0) {
+                debug.innerText = `> Flux OK (${allVisits.length} trains trouvés)`;
+                render(allVisits);
             } else {
-                debug.innerText = "> Connecté, mais aucun train trouvé.";
-                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté en temps réel vers Paris.</div>';
+                debug.innerText = "> Connecté aux 4 IDs, mais aucun train dans les flux.";
+                document.getElementById('board').innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté (vérifiez si le trafic est interrompu).</div>';
             }
-
         } catch (e) {
-            debug.innerText = "> ÉCHEC : " + e.message;
-            board.innerHTML = `<div style="text-align:center;margin-top:100px;color:red;"><b>Erreur d'authentification</b><br>${e.message}<br><br><small>Le serveur refuse le Header apiKey ou l'ID.</small></div>`;
+            debug.innerText = "> Erreur : " + e.message;
         }
     }
 
     function render(visits) {
         const board = document.getElementById('board');
         const now = new Date();
+        const seen = new Set();
         
-        // Filtrage direction Paris (On exclut Boissy et La Varenne)
-        let trains = visits.map(v => v.MonitoredVehicleJourney)
+        let trains = visits
+            .map(v => v.MonitoredVehicleJourney)
             .filter(j => {
+                // Éviter les doublons (même train sur deux IDs)
+                const ref = j.FramedVehicleJourneyRef?.DatedVehicleJourneyRef || j.TrainNumber?.value;
+                if (seen.has(ref)) return false;
+                seen.add(ref);
+
+                // Filtrage Direction Paris
                 const dest = j.DestinationName[0].value.toLowerCase();
                 return !dest.includes('boissy') && !dest.includes('varenne');
             })
@@ -114,8 +114,13 @@
                 return tA - tB;
             });
 
+        if (trains.length === 0) {
+            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Tous les trains détectés vont vers la Province.</div>';
+            return;
+        }
+
         let html = '';
-        trains.slice(0, 6).forEach(j => {
+        trains.slice(0, 7).forEach(j => {
             const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
             const mission = j.JourneyNote?.[0]?.value || "----";
             const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
@@ -131,13 +136,13 @@
                     </div>
                 </div>`;
         });
-        board.innerHTML = html || '<div style="text-align:center;margin-top:100px;color:#999;">Pas de trains vers Paris trouvés.</div>';
+        board.innerHTML = html;
     }
 
     setInterval(updateClock, 1000);
     updateClock();
-    fetchSchedules();
-    setInterval(fetchSchedules, 30000);
+    fetchAllSchedules();
+    setInterval(fetchAllSchedules, 30000);
 </script>
 </body>
 </html>
