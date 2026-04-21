@@ -2,192 +2,94 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siel RER A - Joinville</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
+    <title>Scanner Debug PRIM - Joinville</title>
     <style>
-        :root {
-            --ratp-bg-main: #f5f5f5;
-            --ratp-text-black: #000000;
-            --ratp-bg-dark: #222222;
-            --ratp-text-yellow: #fbc02d;
-            --ratp-line-a-red: #c0333a;
-            --ratp-quai-gray: #b0bec5;
-            --ratp-border-gray: #e0e0e0;
-        }
-        body { background-color: var(--ratp-bg-main); color: var(--ratp-text-black); font-family: 'Cabin', sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        header { background-color: var(--ratp-bg-main); padding: 15px 25px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 8px solid var(--ratp-line-a-red); }
-        .header-logos { display: flex; align-items: center; gap: 12px; }
-        .logo-rer { border: 4px solid #1a1a1a; background: white; border-radius: 12px; width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; }
-        .logo-a { background-color: var(--ratp-line-a-red); border-radius: 12px; width: 65px; height: 65px; display: flex; align-items: center; justify-content: center; font-size: 45px; font-weight: 900; color: white; }
-        .header-destinations { margin-left: 20px; }
-        .dest-row { font-size: 24px; font-weight: 700; text-transform: uppercase; line-height: 1.1; }
-        .header-time { background-color: var(--ratp-bg-dark); color: white; padding: 8px 18px; border-radius: 8px; font-size: 28px; font-weight: 700; }
-
-        .train-list { flex-grow: 1; padding: 0 25px; overflow-y: auto; }
-        .train-row { display: grid; grid-template-columns: 130px 1fr 140px 100px; align-items: center; padding: 18px 0; border-bottom: 2px solid var(--ratp-border-gray); }
-        .mission-code { background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 16px; font-weight: bold; font-family: monospace; text-align: center; }
-        .destination-name { font-size: 32px; font-weight: 700; text-transform: uppercase; padding-left: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .time-box { background-color: var(--ratp-bg-dark); color: var(--ratp-text-yellow); border-radius: 6px; text-align: center; padding: 6px; width: 110px; }
-        .time-box .val { font-size: 42px; font-weight: 700; display: block; line-height: 0.9; }
-        .time-box .unit { font-size: 13px; text-transform: lowercase; }
-        .quai-box { background-color: var(--ratp-quai-gray); border: 1px solid #78909c; border-radius: 6px; text-align: center; width: 65px; margin-left: auto; }
-        .quai-box .label { font-size: 11px; display: block; }
-        .quai-box .val { font-size: 26px; font-weight: 700; }
-
-        .info-msg { text-align: center; margin-top: 100px; font-size: 20px; color: #666; padding: 20px; line-height: 1.5; }
-        footer { background: #333; padding: 8px 20px; color: #00ff00; font-size: 11px; font-family: monospace; border-top: 1px solid #000; }
+        body { background: #1a1a1a; color: white; font-family: sans-serif; padding: 20px; }
+        .status { padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .ok { background: #2e7d32; }
+        .error { background: #c62828; }
+        .train-card { background: #333; padding: 15px; margin-bottom: 10px; border-left: 5px solid #c0333a; }
+        pre { background: #000; color: #00ff00; padding: 15px; overflow: auto; max-height: 300px; font-size: 11px; border: 1px solid #444; }
+        h3 { color: #fbc02d; margin-top: 0; }
+        .meta { color: #aaa; font-size: 12px; }
     </style>
 </head>
 <body>
 
-<header>
-    <div class="header-logos">
-        <div class="logo-rer">RER</div>
-        <div class="logo-a">A</div>
-    </div>
-    <div class="header-destinations">
-        <div class="dest-row">Joinville-le-Pont</div>
-        <div class="dest-row" style="font-size: 16px; color: var(--ratp-line-a-red);">DIRECTION PARIS / OUEST</div>
-    </div>
-    <div class="header-time" id="clock">--:--</div>
-</header>
+    <h2>Scanner Temps Réel - Joinville-le-Pont</h2>
+    <div id="status-box" class="status">Initialisation...</div>
 
-<div class="train-list" id="board">
-    <div class="info-msg">Chargement du flux temps réel...</div>
-</div>
+    <div id="results">
+        <h3>Trains détectés (Sans filtre) :</h3>
+        <div id="train-list">En attente de données...</div>
+    </div>
 
-<footer id="debug-log">Prêt.</footer>
+    <hr>
+    <h3>Réponse JSON brute du serveur :</h3>
+    <pre id="raw-json">Aucune donnée reçue pour le moment.</pre>
 
 <script>
-    // --- CONFIGURATION ---
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const STOP_ID = 'STIF:StopPoint:Q:22105:'; // ID exact Joinville-le-Pont
     
-    // URL PRIM (IDFM)
-    const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
-    
-    // Proxy AllOrigins pour contourner le blocage CORS du navigateur
-    const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
+    // STRATÉGIE : On essaie l'ID de la ZONE (StopArea) qui est plus global que le point (StopPoint)
+    // Si celui-ci ne marche pas, on testera STIF:StopPoint:Q:22105:
+    const STOP_ID = 'STIF:StopArea:SP:41170'; 
 
-    function log(msg, isError = false) { 
-        const footer = document.getElementById('debug-log');
-        footer.innerText = "> " + msg;
-        footer.style.color = isError ? "#ff4444" : "#00ff00";
-        console.log(msg);
-    }
+    async function scan() {
+        const statusBox = document.getElementById('status-box');
+        const rawBox = document.getElementById('raw-json');
+        const list = document.getElementById('train-list');
 
-    function updateClock() {
-        document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
-    }
+        const TARGET_URL = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
+        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
 
-    async function fetchSchedules() {
-        log("Actualisation des données...");
-        
         try {
+            statusBox.innerText = "Connexion au proxy...";
             const response = await fetch(PROXY_URL);
-            if (!response.ok) throw new Error(`Erreur Proxy (${response.status})`);
-
             const wrapper = await response.json();
-            if (!wrapper.contents) throw new Error("Réponse vide du serveur.");
+            
+            if (!wrapper.contents) {
+                throw new Error("Le proxy a renvoyé une enveloppe vide.");
+            }
 
+            rawBox.innerText = wrapper.contents; // On affiche le JSON brut quoi qu'il arrive
             const data = JSON.parse(wrapper.contents);
             
-            // Structure SIRI Lite : Siri -> ServiceDelivery -> StopMonitoringDelivery[0]
             const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
             const visits = delivery?.MonitoredStopVisit;
 
-            if (visits && Array.isArray(visits) && visits.length > 0) {
-                renderBoard(visits);
-                log("Flux mis à jour à " + new Date().toLocaleTimeString());
-            } else {
-                // Si l'API répond mais qu'il n'y a aucun train
-                log("L'API ne renvoie aucun train actuellement.", true);
-                document.getElementById('board').innerHTML = `
-                    <div class="info-msg">
-                        <b>Aucun train en approche.</b><br>
-                        <span style="font-size:14px;">Il n'y a aucun passage détecté par l'API pour cet arrêt à cet instant.</span>
-                    </div>`;
+            if (!visits || visits.length === 0) {
+                statusBox.className = "status error";
+                statusBox.innerText = "Connecté, mais l'API renvoie une liste de trains VIDE.";
+                list.innerHTML = "Aucun train dans le flux JSON.";
+                return;
             }
 
-        } catch (e) {
-            log("ERREUR : " + e.message, true);
-            document.getElementById('board').innerHTML = `
-                <div class="info-msg" style="color:#c0333a;">
-                    <b>Erreur de liaison API</b><br>
-                    <small>${e.message}</small>
-                </div>`;
-        }
-    }
-
-    function renderBoard(visits) {
-        const board = document.getElementById('board');
-        const now = new Date();
-
-        // 1. Transformer et Filtrer
-        const allTrains = visits.map(v => v.MonitoredVehicleJourney);
-        
-        // Filtrage : On garde uniquement les trains qui ne vont PAS vers Boissy ou La Varenne
-        const parisTrains = allTrains.filter(j => {
-            const dest = j.DestinationName?.[0]?.value.toLowerCase() || "";
-            return !dest.includes('boissy') && !dest.includes('varenne');
-        });
-
-        // 2. Si on a des trains mais que le filtre Paris les a tous enlevés
-        if (allTrains.length > 0 && parisTrains.length === 0) {
-            board.innerHTML = `
-                <div class="info-msg">
-                    <b>Trafic uniquement vers la Province.</b><br>
-                    <span style="font-size:14px;">L'API détecte des trains vers Boissy/La Varenne, mais aucun vers Paris actuellement.</span>
-                </div>`;
-            return;
-        }
-
-        // 3. Trier par temps de passage
-        parisTrains.sort((a, b) => {
-            const timeA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
-            const timeB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
-            return timeA - timeB;
-        });
-
-        // 4. Affichage
-        let html = '';
-        parisTrains.slice(0, 6).forEach(j => {
-            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
-            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
-            const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
-            const diffMin = Math.round((depTime - now) / 60000);
+            statusBox.className = "status ok";
+            statusBox.innerText = `Succès ! ${visits.length} trains trouvés dans le flux.`;
             
-            let timeVal = diffMin <= 0 ? "À" : diffMin;
-            let timeUnit = diffMin <= 0 ? "l'approche" : "min";
+            // Affichage simple de tous les trains sans exception
+            list.innerHTML = "";
+            visits.forEach(v => {
+                const j = v.MonitoredVehicleJourney;
+                const dest = j.DestinationName[0].value;
+                const time = j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime;
+                
+                list.innerHTML += `
+                    <div class="train-card">
+                        <strong>Destination : ${dest}</strong><br>
+                        <span class="meta">Heure : ${new Date(time).toLocaleTimeString()} | Mission : ${j.JourneyNote?.[0]?.value || 'N/A'}</span>
+                    </div>`;
+            });
 
-            html += `
-                <div class="train-row">
-                    <div class="mission-code">${mission}</div>
-                    <div class="destination-name">${dest}</div>
-                    <div class="time-box">
-                        <span class="val">${timeVal}</span>
-                        <span class="unit">${timeUnit}</span>
-                    </div>
-                    <div class="quai-box">
-                        <span class="label">quai</span>
-                        <span class="val">2</span>
-                    </div>
-                </div>`;
-        });
-        board.innerHTML = html;
+        } catch (e) {
+            statusBox.className = "status error";
+            statusBox.innerText = "ERREUR : " + e.message;
+        }
     }
 
-    // --- INITIALISATION ---
-    setInterval(updateClock, 1000);
-    updateClock();
-    
-    // Premier lancement
-    fetchSchedules();
-    
-    // Rafraîchissement toutes les 30 secondes
-    setInterval(fetchSchedules, 30000);
+    scan();
+    setInterval(scan, 30000);
 </script>
 </body>
 </html>
