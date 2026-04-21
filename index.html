@@ -2,20 +2,20 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Siel RER A - Joinville</title>
+    <title>Siel RER A - Joinville (Version Certifiée)</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
-        :root { --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
-        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { background: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--red); }
-        .logo-a { background: var(--red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
+        :root { --ratp-red: #c0333a; --dark: #222; --yellow: #fbc02d; }
+        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        header { background: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--ratp-red); }
+        .logo-a { background: var(--ratp-red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
         .clock { background: var(--dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
         .board { flex-grow: 1; padding: 20px; overflow-y: auto; }
-        .row { display: grid; grid-template-columns: 100px 1fr 130px; align-items: center; padding: 18px 0; border-bottom: 2px solid #ddd; }
+        .row { display: grid; grid-template-columns: 100px 1fr 140px; align-items: center; padding: 18px 0; border-bottom: 2px solid #ddd; }
         .mission { background: #ddd; padding: 5px; border-radius: 4px; text-align: center; font-weight: bold; font-family: monospace; }
         .dest { font-size: 28px; font-weight: 700; text-transform: uppercase; padding-left: 15px; }
-        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 90px; }
-        .time .val { font-size: 36px; font-weight: bold; display: block; line-height: 0.8; }
+        .time { background: var(--dark); color: var(--yellow); border-radius: 6px; text-align: center; padding: 8px; min-width: 100px; }
+        .time .val { font-size: 38px; font-weight: bold; display: block; line-height: 0.8; }
         footer { background: #333; color: #0f0; padding: 10px 20px; font-family: monospace; font-size: 11px; }
     </style>
 </head>
@@ -26,23 +26,23 @@
         <div class="logo-a">A</div>
         <div style="margin-left:15px;">
             <div style="font-size:24px; font-weight:bold;">JOINVILLE-LE-PONT</div>
-            <div style="font-size:14px; color:var(--red)">DIRECTION PARIS / OUEST</div>
+            <div style="font-size:14px; color:var(--ratp-red)">DIRECTION PARIS / OUEST</div>
         </div>
     </div>
     <div class="clock" id="clock">--:--</div>
 </header>
 
 <div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;">Tentative de connexion au code Maître 70640...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Initialisation du flux certifié...</div>
 </div>
 
 <footer id="debug">Prêt.</footer>
 
 <script>
+    // --- CONFIGURATION OFFICIELLE ---
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    
-    // CODE MAÎTRE issu de votre fichier "emplacement-des-gares-idf.csv" (id_ref_zdc)
-    const MONITORING_REF = 'STIF:StopArea:SP:70640'; 
+    const STOP_ID = 'STIF:StopPoint:Q:473943:'; // Id extrait de votre fichier TR
+    const LINE_ID = 'STIF:Line::C01742:';      // RER A
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
@@ -52,38 +52,39 @@
         const debug = document.getElementById('debug');
         const board = document.getElementById('board');
         
-        debug.innerText = "> Interrogation du pôle Joinville...";
+        debug.innerText = "> Interrogation de l'API (Modèle SIRI Lite)...";
 
-        // URL sans LineRef pour éviter les conflits d'identifiants
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}&apikey=${API_KEY}`;
+        // URL conforme à la documentation : apikey dans l'URL
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&LineRef=${LINE_ID}&apikey=${API_KEY}`;
         
-        // Proxy en mode RAW (AllOrigins)
+        // Proxy en mode RAW pour éviter le "Load failed" (CORS)
         const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}&t=${Date.now()}`;
 
         try {
             const response = await fetch(proxy);
-            if (!response.ok) throw new Error("Le serveur ne répond pas.");
+            if (!response.ok) throw new Error("Erreur réseau ou proxy (" + response.status + ")");
 
             const data = await response.json();
             const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
 
             if (delivery?.ErrorCondition) {
-                throw new Error("API PRIM : " + delivery.ErrorCondition.ErrorInformation.ErrorText);
+                throw new Error("PRIM : " + delivery.ErrorCondition.ErrorInformation.ErrorText);
             }
 
             const visits = delivery?.MonitoredStopVisit;
 
             if (visits && visits.length > 0) {
-                debug.innerText = `> Flux OK (${visits.length} passages)`;
+                debug.innerText = `> Flux OK (${visits.length} trains) - ${new Date().toLocaleTimeString()}`;
                 render(visits);
             } else {
-                debug.innerText = "> Aucun passage trouvé pour cet ID.";
-                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté pour le moment.</div>';
+                debug.innerText = "> Connecté, mais aucun train trouvé dans le flux.";
+                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté par le flux temps réel.</div>';
             }
 
         } catch (e) {
-            debug.innerText = "> " + e.message;
-            board.innerHTML = `<div style="text-align:center;margin-top:100px;color:red;"><b>Erreur critique</b><br>${e.message}</div>`;
+            debug.innerText = "> ÉCHEC : " + e.message;
+            console.error(e);
+            board.innerHTML = `<div style="text-align:center;margin-top:100px;color:red;"><b>Erreur de chargement</b><br>${e.message}</div>`;
         }
     }
 
@@ -91,17 +92,11 @@
         const board = document.getElementById('board');
         const now = new Date();
         
-        // Filtrage pour ne garder que le RER A vers Paris
-        let trains = visits
-            .map(v => v.MonitoredVehicleJourney)
+        // Filtrage Paris / Ouest (on exclut Boissy et La Varenne)
+        let trains = visits.map(v => v.MonitoredVehicleJourney)
             .filter(j => {
-                // On vérifie que c'est bien la ligne A (pour ne pas avoir les bus)
-                const line = j.LineRef?.value || "";
-                if (!line.includes('C01742')) return false;
-
-                // On garde seulement la direction Paris
-                const d = j.DestinationName[0].value.toLowerCase();
-                return !d.includes('boissy') && !d.includes('varenne');
+                const dest = j.DestinationName[0].value.toLowerCase();
+                return !dest.includes('boissy') && !dest.includes('varenne');
             })
             .sort((a, b) => {
                 const tA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
@@ -110,30 +105,33 @@
             });
 
         if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Pas de trains RER A vers Paris trouvés.</div>';
+            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Trafic uniquement vers la Province.</div>';
             return;
         }
 
         let html = '';
         trains.slice(0, 6).forEach(j => {
-            const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
-            const mission = j.JourneyNote?.[0]?.value || "----";
-            const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
-            const diff = Math.round((time - now) / 60000);
+            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "??";
+            const destName = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
+            
+            // Calcul du temps en minutes (SIRI Lite renvoie de l'UTC)
+            const depTime = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
+            const diffMin = Math.round((depTime - now) / 60000);
 
             html += `
                 <div class="row">
                     <div class="mission">${mission}</div>
-                    <div class="dest">${dest}</div>
+                    <div class="dest">${destName}</div>
                     <div class="time">
-                        <span class="val">${diff <= 0 ? 'À' : diff}</span>
-                        <span style="font-size:12px">${diff <= 0 ? 'approche' : 'min'}</span>
+                        <span class="val">${diffMin <= 0 ? 'À' : diffMin}</span>
+                        <span style="font-size:12px">${diffMin <= 0 ? 'l\'approche' : 'min'}</span>
                     </div>
                 </div>`;
         });
         board.innerHTML = html;
     }
 
+    // --- EXECUTION ---
     setInterval(updateClock, 1000);
     updateClock();
     fetchSchedules();
