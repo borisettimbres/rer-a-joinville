@@ -2,11 +2,11 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Siel RER A - Joinville (Certifié TR)</title>
+    <title>Siel RER A - Joinville (Doc Officielle)</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
         :root { --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
-        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { background: #f5f5f5; font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
         header { background: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--red); }
         .logo-a { background: var(--red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
         .clock { background: var(--dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
@@ -33,73 +33,73 @@
 </header>
 
 <div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;">Connexion au flux Temps Réel certifié...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Chargement via référentiel TR...</div>
 </div>
 
-<footer id="debug">Prêt.</footer>
+<footer id="debug-log">Prêt.</footer>
 
 <script>
-    // --- CONFIGURATION ---
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
+    const LINE_ID = 'STIF:Line::C01742:';
     
-    /**
-     * IDENTIFIANTS CERTIFIÉS (Source : Votre fichier Périmètre TR)
-     * Pour Joinville-le-Pont (RER A) :
-     * Quai Paris : 473943 ou 473951
-     * Quai Province : 473950 ou 473944
-     */
-    const STOP_ID = 'STIF:StopPoint:Q:473943:'; 
+    // Les 4 identifiants de quai trouvés dans votre fichier TR pour Joinville
+    const QUAIS = [
+        'STIF:StopPoint:Q:473943:',
+        'STIF:StopPoint:Q:473951:',
+        'STIF:StopPoint:Q:473950:',
+        'STIF:StopPoint:Q:473944:'
+    ];
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
     async function fetchSchedules() {
-        const debug = document.getElementById('debug');
+        const debug = document.getElementById('debug-log');
         const board = document.getElementById('board');
+        const status = document.getElementById('status');
         
-        debug.innerText = "> Interrogation du quai certifié 473943...";
+        debug.innerText = "> Scan des quais TR...";
 
-        // On simplifie l'URL au maximum pour éviter l'erreur "identifiants inconnus"
-        // On retire le LineRef car l'identifiant du quai est déjà spécifique au RER A
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
-        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}&t=${Date.now()}`;
+        for (const stopId of QUAIS) {
+            // Construction de l'URL avec apikey en paramètre (indispensable pour les proxys)
+            const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${stopId}&LineRef=${LINE_ID}&apikey=${API_KEY}`;
+            
+            // Utilisation du proxy avec AllOrigins
+            const url = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}&t=${Date.now()}`;
 
-        try {
-            const response = await fetch(proxy);
-            if (!response.ok) throw new Error("Serveur indisponible");
+            try {
+                const response = await fetch(url);
+                if (!response.ok) continue;
 
-            const data = await response.json();
-            const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
+                const resJson = await response.json();
+                const data = JSON.parse(resJson.contents);
+                
+                const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit;
 
-            if (delivery?.ErrorCondition) {
-                throw new Error("PRIM : " + delivery.ErrorCondition.ErrorInformation.ErrorText);
+                if (visits && visits.length > 0) {
+                    debug.innerText = `> Succès avec l'ID ${stopId}`;
+                    render(visits);
+                    return; // On a trouvé le bon quai, on arrête le scan
+                }
+            } catch (e) {
+                console.warn("Échec sur l'ID " + stopId);
             }
-
-            const visits = delivery?.MonitoredStopVisit;
-
-            if (visits && visits.length > 0) {
-                debug.innerText = `> Flux OK (${visits.length} trains) - ${new Date().toLocaleTimeString()}`;
-                render(visits);
-            } else {
-                debug.innerText = "> Connecté, mais aucun train trouvé.";
-                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté par le flux temps réel.</div>';
-            }
-
-        } catch (e) {
-            debug.innerText = "> ERREUR : " + e.message;
-            board.innerHTML = `<div style="text-align:center;margin-top:100px;color:red;"><b>Erreur de liaison</b><br>${e.message}</div>`;
         }
+        
+        status.innerHTML = "Aucun train détecté sur les 4 quais du référentiel TR.";
+        debug.innerText = "> Scan terminé, aucun résultat.";
     }
 
     function render(visits) {
         const board = document.getElementById('board');
         const now = new Date();
         
-        // On filtre Paris / Ouest (On exclut les terminus Est)
+        // Filtrage pour ne garder que la direction Paris
         let trains = visits.map(v => v.MonitoredVehicleJourney)
             .filter(j => {
                 const d = j.DestinationName[0].value.toLowerCase();
+                // On exclut les terminus de l'Est pour n'avoir que Paris/Ouest
                 return !d.includes('boissy') && !d.includes('varenne');
             })
             .sort((a, b) => {
@@ -109,14 +109,14 @@
             });
 
         if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Trafic Province uniquement ou aucun train prévu.</div>';
+            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Pas de trains vers Paris trouvés sur ce quai.</div>';
             return;
         }
 
         let html = '';
         trains.slice(0, 6).forEach(j => {
-            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
             const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
+            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "??";
             const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
             const diff = Math.round((time - now) / 60000);
 
