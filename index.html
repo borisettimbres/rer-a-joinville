@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>SIEL RER A - Joinville (Version RATP)</title>
+    <title>SIEL RER A - Joinville (Final TR)</title>
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
         :root { --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
@@ -33,64 +33,53 @@
 </header>
 
 <div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Chargement du flux RATP...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;" id="status">Extraction du flux temps réel (Gare 41170)...</div>
 </div>
 
-<footer id="debug">Initialisation...</footer>
+<footer id="debug">Prêt.</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     
-    // IDs RATP pour Joinville RER A (Quais 1 et 2)
-    const STOP_IDS = [
-        'STIF:StopPoint:Q:41171:', 
-        'STIF:StopPoint:Q:41172:'
-    ];
-    const LINE_ID = 'STIF:Line::C01742:';
+    // Identifiant de la Gare de Joinville-le-Pont (StopArea)
+    const MONITORING_REF = 'STIF:StopArea:SP:41170'; 
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
 
-    async function fetchOneStop(id) {
-        // Construction URL SIRI Lite
-        const targetUrl = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${id}&LineRef=${LINE_ID}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+    async function fetchSchedules() {
+        const debug = document.getElementById('debug');
+        const board = document.getElementById('board');
         
+        // On interroge la gare entière pour être sûr de capter le flux RATP
+        const targetUrl = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${MONITORING_REF}`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
         try {
             const response = await fetch(proxyUrl, {
                 method: 'GET',
                 headers: { 
-                    'apiKey': API_KEY, // Majuscule sur le K conforme Slide 13
+                    'apiKey': API_KEY, // Conforme Slide 13
                     'Accept': 'application/json' 
                 }
             });
-            
-            if (!response.ok) return [];
+
+            if (!response.ok) throw new Error("Réponse serveur : " + response.status);
+
             const data = await response.json();
-            return data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit || [];
-        } catch (e) {
-            return [];
-        }
-    }
+            const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit;
 
-    async function fetchAllSchedules() {
-        const debug = document.getElementById('debug');
-        debug.innerText = "> Interrogation des quais RATP...";
-
-        try {
-            const results = await Promise.all(STOP_IDS.map(id => fetchOneStop(id)));
-            let allVisits = [].concat(...results);
-
-            if (allVisits.length > 0) {
-                debug.innerText = `> Flux RATP OK (${allVisits.length} trains)`;
-                render(allVisits);
+            if (visits && visits.length > 0) {
+                debug.innerText = `> Flux Reçu (${visits.length} lignes) - ${new Date().toLocaleTimeString()}`;
+                render(visits);
             } else {
-                debug.innerText = "> Connecté, mais aucun train trouvé (ID valides, flux vide).";
-                document.getElementById('board').innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté par la RATP actuellement.</div>';
+                debug.innerText = "> Connecté, mais aucun train dans le flux de la gare.";
+                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Le serveur ne renvoie aucun horaire pour cette gare actuellement.</div>';
             }
+
         } catch (e) {
-            debug.innerText = "> Erreur : " + e.message;
+            debug.innerText = "> ÉCHEC : " + e.message;
         }
     }
 
@@ -102,12 +91,16 @@
         let trains = visits
             .map(v => v.MonitoredVehicleJourney)
             .filter(j => {
-                // Dé-doublonnage
+                // On garde seulement la ligne A
+                const line = j.LineRef?.value || "";
+                if (!line.includes('C01742') && line !== 'A') return false;
+
+                // Élimination des doublons
                 const ref = j.FramedVehicleJourneyRef?.DatedVehicleJourneyRef || j.TrainNumber?.value;
                 if (seen.has(ref)) return false;
                 seen.add(ref);
 
-                // Direction Paris
+                // Direction Paris uniquement (on exclut Boissy et La Varenne)
                 const dest = j.DestinationName[0].value.toLowerCase();
                 return !dest.includes('boissy') && !dest.includes('varenne');
             })
@@ -118,7 +111,7 @@
             });
 
         if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Trafic Province uniquement sur les écrans.</div>';
+            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train RER A vers Paris détecté dans le flux.</div>';
             return;
         }
 
@@ -144,8 +137,8 @@
 
     setInterval(updateClock, 1000);
     updateClock();
-    fetchAllSchedules();
-    setInterval(fetchAllSchedules, 30000);
+    fetchSchedules();
+    setInterval(fetchSchedules, 30000);
 </script>
 </body>
 </html>
