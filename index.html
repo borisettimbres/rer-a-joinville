@@ -6,7 +6,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@700&display=swap" rel="stylesheet">
     <style>
         :root { --bg: #f5f5f5; --red: #c0333a; --dark: #222; --yellow: #fbc02d; }
-        body { background: var(--bg); font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        body { background: var(--bg); font-family: 'Cabin', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 8px solid var(--red); background: white; }
         .logo-a { background: var(--red); border-radius: 12px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; color: white; }
         .clock { background: var(--dark); color: white; padding: 10px 20px; border-radius: 8px; font-size: 28px; }
@@ -24,22 +24,22 @@
 <header>
     <div style="display:flex; align-items:center;">
         <div class="logo-a">A</div>
-        <div style="margin-left:15px; font-size:22px; font-weight:bold;">JOINVILLE-LE-PONT</div>
+        <div style="margin-left:15px; font-size:22px; font-weight:bold;">JOINVILLE (PARIS)</div>
     </div>
     <div class="clock" id="clock">--:--</div>
 </header>
 
 <div class="list" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;">Chargement des données...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;">Recherche des trains...</div>
 </div>
 
-<footer id="debug-log">Prêt.</footer>
+<footer id="debug-log">Initialisation...</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
     
-    // On utilise l'ID de quai qui a fonctionné au début (sans erreur "inconnu")
-    const STOP_ID = 'STIF:StopPoint:Q:22105:'; 
+    // NOUVEL ID : Quai RER A direction Paris (Quai 2)
+    const STOP_ID = 'STIF:StopPoint:Q:41171:'; 
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
@@ -48,9 +48,8 @@
     async function fetchData() {
         const debug = document.getElementById('debug-log');
         const board = document.getElementById('board');
-        debug.innerText = "> Interrogation du serveur...";
+        debug.innerText = "> Interrogation du quai RER A...";
 
-        // URL ultra-simple : pas de LineRef pour éviter l'erreur 400
         const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
         const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`;
 
@@ -61,23 +60,21 @@
 
             const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
             
-            // Si le serveur renvoie une erreur interne
             if (delivery?.ErrorCondition) {
-                debug.innerText = "> Erreur API : " + delivery.ErrorCondition.ErrorInformation.ErrorText;
+                debug.innerText = "> Erreur : " + delivery.ErrorCondition.ErrorInformation.ErrorText;
                 return;
             }
 
             const visits = delivery?.MonitoredStopVisit;
 
             if (!visits || visits.length === 0) {
-                debug.innerText = "> Réponse vide (aucun train en approche).";
-                board.innerHTML = '<div style="text-align:center;margin-top:50px;">Aucun passage prévu actuellement.</div>';
+                debug.innerText = "> Aucun train trouvé sur ce quai.";
+                board.innerHTML = '<div style="text-align:center;margin-top:50px;">Aucun train prévu (Quai 2).</div>';
                 return;
             }
 
-            debug.innerText = `> Succès : ${visits.length} trains trouvés à ${new Date().toLocaleTimeString()}`;
+            debug.innerText = `> OK : ${visits.length} trains à ${new Date().toLocaleTimeString()}`;
             
-            // Affichage sans AUCUN filtre pour voir si des données arrivent
             let html = '';
             visits.forEach(v => {
                 const j = v.MonitoredVehicleJourney;
@@ -99,7 +96,7 @@
             board.innerHTML = html;
 
         } catch (e) {
-            debug.innerText = "> Erreur de connexion ou de clé.";
+            debug.innerText = "> Erreur réseau ou Proxy.";
         }
     }
 
