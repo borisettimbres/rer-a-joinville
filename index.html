@@ -33,16 +33,17 @@
 </header>
 
 <div class="board" id="board">
-    <div style="text-align:center; margin-top:100px; color:#999;">Connexion au flux IDFM...</div>
+    <div style="text-align:center; margin-top:100px; color:#999;">Chargement des prochains trains...</div>
 </div>
 
 <footer id="debug">Prêt.</footer>
 
 <script>
     const API_KEY = '2pz4kMqzVx2zneQWOTnOrqM6muPE1XVO';
-    const GARE_ID = 'STIF:StopArea:SP:41170'; // Gare de Joinville
-    const LIGNE_ID = 'STIF:Line::C01742:';    // RER A
     
+    // CHANGEMENT CRITIQUE : Identifiant spécifique du QUAI RER A (Quai 2 - Paris)
+    const STOP_ID = 'STIF:StopPoint:Q:41171:'; 
+
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
     }
@@ -50,18 +51,15 @@
     async function fetchSchedules() {
         const debug = document.getElementById('debug');
         const board = document.getElementById('board');
-        
-        debug.innerText = "> Interrogation du serveur...";
+        debug.innerText = "> Interrogation du quai RER A...";
 
-        // Construction de l'URL avec les DEUX identifiants obligatoires pour le RER
-        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${GARE_ID}&LineRef=${LIGNE_ID}&apikey=${API_KEY}`;
-        
-        // Proxy AllOrigins en mode RAW (récupère le JSON direct sans emballage)
+        const target = `https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring?MonitoringRef=${STOP_ID}&apikey=${API_KEY}`;
+        // Utilisation du mode 'raw' de AllOrigins pour éviter les erreurs de parsing
         const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
 
         try {
             const response = await fetch(proxy);
-            if (!response.ok) throw new Error("Erreur de connexion");
+            if (!response.ok) throw new Error("Erreur serveur");
 
             const data = await response.json();
             const delivery = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
@@ -76,13 +74,15 @@
                 debug.innerText = `> Flux OK (${visits.length} trains)`;
                 render(visits);
             } else {
-                debug.innerText = "> Aucun train trouvé pour le RER A.";
-                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train détecté par le serveur.</div>';
+                debug.innerText = "> Aucun train détecté sur ce quai.";
+                board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Aucun train en approche (Quai Paris).</div>';
             }
 
         } catch (e) {
             debug.innerText = "> " + e.message;
-            board.innerHTML = `<div style="text-align:center;margin-top:100px;color:red;">Erreur : ${e.message}</div>`;
+            if (e.message.includes("identifiants")) {
+                debug.innerText += " (Vérifiez si l'API accepte le code 41171)";
+            }
         }
     }
 
@@ -90,27 +90,17 @@
         const board = document.getElementById('board');
         const now = new Date();
         
-        // Filtrage pour ne garder que la direction Paris
-        // (On exclut Boissy et La Varenne)
+        // Pas besoin de filtre directionnel car on interroge déjà le quai spécifique à Paris
         let trains = visits.map(v => v.MonitoredVehicleJourney)
-            .filter(j => {
-                const d = j.DestinationName[0].value.toLowerCase();
-                return !d.includes('boissy') && !d.includes('varenne');
-            })
             .sort((a, b) => {
                 const tA = new Date(a.MonitoredCall.ExpectedDepartureTime || a.MonitoredCall.AimedDepartureTime);
                 const tB = new Date(b.MonitoredCall.ExpectedDepartureTime || b.MonitoredCall.AimedDepartureTime);
                 return tA - tB;
             });
 
-        if (trains.length === 0) {
-            board.innerHTML = '<div style="text-align:center;margin-top:100px;color:#999;">Tous les trains sont vers la Province.</div>';
-            return;
-        }
-
         let html = '';
         trains.slice(0, 6).forEach(j => {
-            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "??";
+            const mission = j.JourneyNote?.[0]?.value || j.PublishedLineName?.[0]?.value || "----";
             const dest = j.DestinationName[0].value.toUpperCase().replace('GARE DE ', '').trim();
             const time = new Date(j.MonitoredCall.ExpectedDepartureTime || j.MonitoredCall.AimedDepartureTime);
             const diff = Math.round((time - now) / 60000);
